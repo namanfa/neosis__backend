@@ -1,0 +1,15 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.env
+.git
+.gitignore
+output/
+*.zip
+*.log
+server_out*.txt
+test_*.py
+patch.py

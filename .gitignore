@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+
+# Backend session data (never commit inference output)
+backend/output/
+*.zip
+*.log
+backend/server_out*.txt
+backend/test_*.py
+backend/patch.py
+
+# Frontend build artifacts
+node_modules/
+.vercel/
+
+# OS
+.DS_Store
+Thumbs.db
