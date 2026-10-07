@@ -17,7 +17,7 @@
     <script>
         window.NOESIS_API_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
             ? "http://localhost:7860/api/sessions"
-            : "https://neosis-backend-01.onrender.com/api/sessions";
+            : `${window.location.origin}/api/sessions`;
 
         // Keep-alive ping: automatically pings /health every 10 minutes while tab is open
         (function keepAlive() {
