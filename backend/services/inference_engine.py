@@ -64,8 +64,6 @@ def draw_annotated_image(img_path, detections, output_path):
 
 def _write_labels_for_image(labels_dir, img_name, detections, iw, ih):
     """Write all YOLO darknet labels for one image in a single file operation."""
-    if not detections:
-        return
     label_path = os.path.join(labels_dir, f"{os.path.splitext(img_name)[0]}.txt")
     lines = []
     for det in detections:
@@ -112,9 +110,10 @@ async def run_inference_generator(session_id: str, conf: float, iou: float, agno
         batch_size = _get_default_batch_size()
 
     # Load YOLOv11 model
+    yield f"data: {json.dumps({'progress': 0, 'total': total_images, 'detections': 0, 'status': 'loading_model'})}\n\n"
     try:
         from ultralytics import YOLO
-        model = YOLO(model_path)
+        model = await asyncio.to_thread(YOLO, model_path)
     except Exception as e:
         yield f"data: {json.dumps({'error': f'Failed to load model: {str(e)}'})}\n\n"
         return
@@ -133,7 +132,7 @@ async def run_inference_generator(session_id: str, conf: float, iou: float, agno
 
         try:
             # Run YOLOv11 inference with class-agnostic NMS enabled
-            results = model(batch_paths, conf=conf, iou=iou, agnostic_nms=agnostic_nms, verbose=False)
+            results = await asyncio.to_thread(model, batch_paths, conf=conf, iou=iou, agnostic_nms=agnostic_nms, verbose=False)
             batch_preds = results  # list of Result objects
 
             # Process each image's results

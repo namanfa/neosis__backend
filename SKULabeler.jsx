@@ -15,8 +15,8 @@ const DARK = {
   navBg:         "rgba(15, 23, 42, 0.92)",
   navBorder:     "rgba(37, 99, 235, 0.2)",
   text:          "#F8FAFC",
-  textSub:       "#94A3B8",
-  textMuted:     "#64748B",
+  textSub:       "#CBD5E1",
+  textMuted:     "#A9B7CB",
   accent:        "#2563EB", // FieldAssist Vivid Blue
   accentDark:    "#1D4ED8",
   accentLight:   "#60A5FA",
@@ -280,12 +280,48 @@ function Shell({ children, stepLabel, title, onToggleTheme }) {
 // ─────────────────────────────────────────────────────────────────────────────
 //  CLAY UPLOAD ZONE
 // ─────────────────────────────────────────────────────────────────────────────
-function UploadZone({ label, accept, hint, icon, value, onChange, isFolder = false }) {
+const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".bmp"]);
+
+function filterImageFiles(files) {
+  const allFiles = Array.from(files || []);
+  const images = allFiles.filter(file => IMAGE_EXTENSIONS.has(file.name.slice(file.name.lastIndexOf(".")).toLowerCase()));
+  return { images, ignored: allFiles.length - images.length };
+}
+
+function entryToFile(entry) {
+  return new Promise(resolve => entry.file(resolve, () => resolve(null)));
+}
+
+async function readDirectory(entry) {
+  const reader = entry.createReader();
+  const entries = [];
+  while (true) {
+    const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+    if (!batch.length) break;
+    entries.push(...batch);
+  }
+  return entries;
+}
+
+async function collectEntryFiles(entry) {
+  if (entry.isFile) {
+    const file = await entryToFile(entry);
+    return file ? [file] : [];
+  }
+  if (entry.isDirectory) {
+    const children = await readDirectory(entry);
+    const nested = await Promise.all(children.map(collectEntryFiles));
+    return nested.flat();
+  }
+  return [];
+}
+
+function UploadZone({ label, accept, hint, icon, value, onChange, isFolder = false, subText, warnText }) {
   const T = useT();
   const [drag, setDrag] = useState(false);
   const ref = useRef();
   const done = value && (Array.isArray(value) || value instanceof FileList ? value.length > 0 : value.name);
-  const displayValue = done ? (isFolder ? `${value.length} files selected` : value.name) : "";
+  const displayValue = done ? (isFolder ? `${value.length} images selected` : value.name) : "";
 
   return (
     <div>
@@ -294,10 +330,23 @@ function UploadZone({ label, accept, hint, icon, value, onChange, isFolder = fal
         onClick={() => ref.current.click()}
         onDragOver={e => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
-        onDrop={e => {
+        onDrop={async e => {
           e.preventDefault();
           setDrag(false);
-          onChange(isFolder ? e.dataTransfer.files : (e.dataTransfer.files[0] || null));
+          if (!isFolder) {
+            onChange(e.dataTransfer.files[0] || null);
+            return;
+          }
+          const transfer = e.dataTransfer;
+          const items = Array.from(transfer.items || []);
+          const hasEntryApi = items.some(item => typeof item.webkitGetAsEntry === "function");
+          if (hasEntryApi) {
+            const entries = items.map(item => item.webkitGetAsEntry?.()).filter(Boolean);
+            const nestedFiles = (await Promise.all(entries.map(collectEntryFiles))).flat();
+            onChange(nestedFiles.length ? nestedFiles : transfer.files);
+          } else {
+            onChange(transfer.files);
+          }
         }}
         style={{
           borderRadius: 16, padding: "18px 16px", textAlign: "center", cursor: "pointer",
@@ -311,8 +360,11 @@ function UploadZone({ label, accept, hint, icon, value, onChange, isFolder = fal
           {done ? "✓" : icon}
         </div>
         <p style={{ ...mono, fontSize: 12, fontWeight: done ? 600 : 400, color: done ? T.success : T.textSub }}>
-          {done ? displayValue : hint}
+          {isFolder ? hint : (done ? displayValue : hint)}
         </p>
+        {subText && <p style={{ ...mono, fontSize: 11, color: T.textSub, marginTop: 5 }}>{subText}</p>}
+        {warnText && <p style={{ ...mono, fontSize: 10, color: T.textMuted, marginTop: 3 }}>{warnText}</p>}
+        {isFolder && value !== null && value.length === 0 && <p style={{ ...mono, fontSize: 11, color: T.danger, marginTop: 5 }}>No PNG/JPG/BMP images found</p>}
         <input
           ref={ref}
           type="file"
@@ -418,7 +470,7 @@ function TipsBanner() {
 // ─────────────────────────────────────────────────────────────────────────────
 function Page1({ onNext, onToggleTheme, setSessionArgs }) {
   const T = useT();
-  const [files, setFiles] = useState({ images: null, weights: null, darknetLabels: null });
+  const [files, setFiles] = useState({ images: null, ignoredImages: 0, weights: null, darknetLabels: null });
   const [conf, setConf]   = useState(0.25);
   const [iou,  setIou]    = useState(0.45);
   const [agnosticNms, setAgnosticNms] = useState(true);
@@ -427,6 +479,10 @@ function Page1({ onNext, onToggleTheme, setSessionArgs }) {
 
   const ready = files.images && files.images.length > 0 && files.weights;
   const set = k => v => setFiles(p => ({ ...p, [k]: v }));
+  const setImages = selectedFiles => {
+    const { images, ignored } = filterImageFiles(selectedFiles);
+    setFiles(p => ({ ...p, images, ignoredImages: ignored }));
+  };
 
   const handleStart = async () => {
     if(!ready) return;
@@ -476,7 +532,9 @@ function Page1({ onNext, onToggleTheme, setSessionArgs }) {
           <div className="clay-card" style={{ padding: 24 }}>
             <h3 style={{ fontWeight: 800, fontSize: 16, marginBottom: 20, color: T.text }}>Dataset & Model Files</h3>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <UploadZone label="Images Folder" accept="image/*" isFolder={true} hint="Drop image folder or click to browse" icon="📁" value={files.images} onChange={set("images")} />
+              <UploadZone label="Images Folder" accept=".png,.jpg,.jpeg,.bmp" isFolder={true} hint="PNG, JPG, JPEG or BMP · subfolders included · drop a folder or choose" icon="📁" value={files.images} onChange={setImages}
+                subText={files.images !== null ? `${files.images.length} image${files.images.length === 1 ? "" : "s"} accepted` : null}
+                warnText={files.ignoredImages > 0 ? `${files.ignoredImages} other file${files.ignoredImages === 1 ? "" : "s"} ignored` : null} />
               <UploadZone label="YOLOv11 Weights (.pt)" accept=".pt" hint="Upload YOLOv11 .pt model file" icon="⚡" value={files.weights} onChange={set("weights")} />
               <UploadZone label="Darknet Labels (optional)" accept="" hint="Upload _darknet.labels file" icon="🏷️" value={files.darknetLabels} onChange={set("darknetLabels")} />
             </div>
@@ -543,27 +601,36 @@ function Page1({ onNext, onToggleTheme, setSessionArgs }) {
 // ─────────────────────────────────────────────────────────────────────────────
 //  PAGE 2 — RUNNING INFERENCE
 // ─────────────────────────────────────────────────────────────────────────────
-function Page2({ onNext, onToggleTheme, sessionId, conf, iou, agnosticNms }) {
+function Page2({ onNext, onBack, onToggleTheme, sessionId, conf, iou, agnosticNms }) {
   const T = useT();
   const [progress, setProgress] = useState(0);
   const [total, setTotal] = useState(0);
   const [log, setLog] = useState([`Connecting to YOLOv11 Engine (agnostic_nms=${agnosticNms})...`]);
   const [done, setDone] = useState(false);
+  const [inferenceError, setInferenceError] = useState("");
   const [totalDetections, setTotalDetections] = useState(0);
   const [lastImageDets, setLastImageDets] = useState(0);
   const [logOpen, setLogOpen] = useState(true);
   const logRef = useRef({ addedRunning: false });
+  const doneRef = useRef(false);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     if(!sessionId) return;
     logRef.current = { addedRunning: false };
+    doneRef.current = false;
+    mountedRef.current = true;
     const sse = new EventSource(`${API_BASE_URL}/${sessionId}/infer?conf=${conf}&iou=${iou}&agnostic_nms=${agnosticNms}`);
 
     sse.onmessage = (e) => {
       const data = JSON.parse(e.data);
+      if(data.status === "loading_model") {
+        setLog(l => l.includes("Loading model...") ? l : [...l, "Loading model..."]);
+      }
       if(data.error) {
         setLog(l => [...l, `Error: ${data.error}`]);
         sse.close();
+        if (mountedRef.current && !doneRef.current) setInferenceError(data.error);
         return;
       }
 
@@ -594,6 +661,7 @@ function Page2({ onNext, onToggleTheme, sessionId, conf, iou, agnosticNms }) {
       }
 
       if(data.done) {
+        doneRef.current = true;
         setDone(true);
         setLog(l => [...l, "✓ Inference complete!"]);
         sse.close();
@@ -601,13 +669,30 @@ function Page2({ onNext, onToggleTheme, sessionId, conf, iou, agnosticNms }) {
       }
     };
 
-    return () => sse.close();
+    sse.onerror = () => {
+      if (!doneRef.current && mountedRef.current) {
+        sse.close();
+        setLog(l => [...l, "Connection to the inference server was lost."]);
+        setInferenceError("Connection to the inference server was lost.");
+      }
+    };
+
+    return () => {
+      mountedRef.current = false;
+      sse.close();
+    };
   }, [sessionId, conf, iou, agnosticNms]);
 
   const pct = total ? Math.min((progress / total) * 100, 100) : 0;
 
   return (
     <Shell stepLabel="Step 02 — Processing" title="Executing YOLOv11 Inference" onToggleTheme={onToggleTheme}>
+      {inferenceError ? (
+        <div className="clay-card" style={{ maxWidth: 720, width: "100%", padding: 28, textAlign: "center" }}>
+          <p style={{ ...mono, color: T.danger, marginBottom: 18 }}>{inferenceError}</p>
+          <button className="clay-btn-secondary" onClick={onBack}>Back to setup</button>
+        </div>
+      ) : (
       <div style={{ maxWidth: 720, width: "100%" }}>
         {/* Progress Card */}
         <div className="clay-card" style={{ textAlign: "center", padding: "40px 36px 32px", marginBottom: 20 }}>
@@ -660,6 +745,7 @@ function Page2({ onNext, onToggleTheme, sessionId, conf, iou, agnosticNms }) {
           <StatCard label="Remaining" value={Math.max(0, total - progress)} />
         </div>
       </div>
+      )}
     </Shell>
   );
 }
@@ -671,14 +757,28 @@ function Page3({ onViewImages, onRerun, onToggleTheme, sessionId, setAnalyticsDa
   const T = useT();
   const [classOpen, setClassOpen] = useState(false);
   const [data, setData] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/${sessionId}/analytics`)
-      .then(r => r.json())
-      .then(d => { setData(d); setAnalyticsData(d); })
-      .catch(console.error);
-  }, [sessionId]);
+      .then(r => {
+        if (!r.ok) throw new Error(`Analytics request failed (${r.status})`);
+        return r.json();
+      })
+      .then(d => { setData(d); setAnalyticsData(d); setLoadError(false); })
+      .catch(() => setLoadError(true));
+  }, [sessionId, retryCount]);
 
+  if(loadError) return <Shell stepLabel="Step 03 — Review" title="Detection Summary & Analytics" onToggleTheme={onToggleTheme}>
+    <div className="clay-card" style={{ padding: 28, textAlign: "center" }}>
+      <p style={{ ...mono, color: T.danger, marginBottom: 18 }}>Could not load results</p>
+      <div style={{ display: "flex", justifyContent: "center", gap: 10 }}>
+        <button className="clay-btn-secondary" onClick={() => { setLoadError(false); setRetryCount(n => n + 1); }}>Retry</button>
+        <button className="clay-btn-secondary" onClick={onRerun}>Back to setup</button>
+      </div>
+    </div>
+  </Shell>;
   if(!data) return <Shell><p style={{ ...mono, padding: 40, color: T.textMuted }}>Loading analytics...</p></Shell>;
 
   const { summary, histogram, class_counts } = data;
@@ -1140,7 +1240,7 @@ function App() {
     <PageCtx.Provider value={page}>
       <ThemeCtx.Provider value={theme}>
         {page === 1 && <Page1 onNext={() => setPage(2)} onToggleTheme={() => setDark(d => !d)} setSessionArgs={(id, c, i, nms) => { setSessionId(id); setConf(c); setIou(i); setAgnosticNms(nms); }} />}
-        {page === 2 && <Page2 onNext={() => setPage(3)} onToggleTheme={() => setDark(d => !d)} sessionId={sessionId} conf={conf} iou={iou} agnosticNms={agnosticNms} />}
+        {page === 2 && <Page2 onNext={() => setPage(3)} onBack={() => setPage(1)} onToggleTheme={() => setDark(d => !d)} sessionId={sessionId} conf={conf} iou={iou} agnosticNms={agnosticNms} />}
         {page === 3 && <Page3 onViewImages={() => setPage(4)} onRerun={() => setPage(1)} onToggleTheme={() => setDark(d => !d)} sessionId={sessionId} setAnalyticsData={setAdvData} />}
         {page === 4 && <Page4 onBack={() => setPage(3)} onToggleTheme={() => setDark(d => !d)} sessionId={sessionId} analyticsData={advData} />}
       </ThemeCtx.Provider>
