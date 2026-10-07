@@ -1,4 +1,5 @@
 import os
+import threading
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -18,6 +19,19 @@ os.makedirs(SESSION_BASE_DIR, exist_ok=True)
 from services import upload_handler, inference_engine, analytics, preview, export, converter
 
 app = FastAPI(title="SKU Labeler API")
+
+
+def _warm_inference_imports():
+    try:
+        import torch
+        from ultralytics import YOLO
+    except Exception:
+        pass
+
+
+@app.on_event("startup")
+async def start_inference_import_warmup():
+    threading.Thread(target=_warm_inference_imports, name="inference-import-warmup", daemon=True).start()
 
 app.add_middleware(
     CORSMiddleware,
@@ -64,4 +78,3 @@ if os.path.exists(jsx_file):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=7860)
-

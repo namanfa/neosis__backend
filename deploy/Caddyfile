@@ -1,0 +1,11 @@
+{$DOMAIN} {
+    basic_auth {
+        {$AUTH_USER} {$AUTH_HASH}
+    }
+    request_body {
+        max_size 200MB
+    }
+    reverse_proxy app:7860 {
+        flush_interval -1
+    }
+}

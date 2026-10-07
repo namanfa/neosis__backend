@@ -4,6 +4,7 @@ __pycache__/
 *.pyo
 venv/
 .env
+deploy/.env
 
 # Backend session data (never commit inference output)
 backend/output/
@@ -20,3 +21,4 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
+.git

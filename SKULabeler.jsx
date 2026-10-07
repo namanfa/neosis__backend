@@ -475,6 +475,7 @@ function Page1({ onNext, onToggleTheme, setSessionArgs }) {
   const [iou,  setIou]    = useState(0.45);
   const [agnosticNms, setAgnosticNms] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
   const ready = files.images && files.images.length > 0 && files.weights;
@@ -487,6 +488,7 @@ function Page1({ onNext, onToggleTheme, setSessionArgs }) {
   const handleStart = async () => {
     if(!ready) return;
     setUploading(true);
+    setUploadProgress("");
     setErrorMsg("");
     try {
       // 1. Create Session
@@ -494,13 +496,42 @@ function Page1({ onNext, onToggleTheme, setSessionArgs }) {
       if(!sesRes.ok) throw new Error("Failed to create session");
       const { session_id } = await sesRes.json();
 
-      // 2. Upload Images
-      const imgData = new FormData();
-      for (let i = 0; i < files.images.length; i++) {
-        imgData.append("files", files.images[i]);
+      // 2. Upload Images in sequential batches (up to 40 files or about 40 MB)
+      const imageBatches = [];
+      let currentBatch = [];
+      let currentBatchBytes = 0;
+      const maxBatchFiles = 40;
+      const maxBatchBytes = 40 * 1024 * 1024;
+      for (const image of files.images) {
+        if (currentBatch.length > 0 && (currentBatch.length >= maxBatchFiles || currentBatchBytes + image.size > maxBatchBytes)) {
+          imageBatches.push(currentBatch);
+          currentBatch = [];
+          currentBatchBytes = 0;
+        }
+        currentBatch.push(image);
+        currentBatchBytes += image.size;
       }
-      const imgRes = await fetch(`${API_BASE_URL}/${session_id}/upload/images`, { method: "POST", body: imgData });
-      if(!imgRes.ok) throw new Error("Image upload failed");
+      if (currentBatch.length > 0) imageBatches.push(currentBatch);
+
+      let uploadedImages = 0;
+      setUploadProgress(`Uploading images 0 / ${files.images.length}...`);
+      for (let batchIndex = 0; batchIndex < imageBatches.length; batchIndex++) {
+        const batch = imageBatches[batchIndex];
+        let uploaded = false;
+        for (let attempt = 0; attempt < 2 && !uploaded; attempt++) {
+          const imgData = new FormData();
+          for (const image of batch) imgData.append("files", image);
+          try {
+            const imgRes = await fetch(`${API_BASE_URL}/${session_id}/upload/images`, { method: "POST", body: imgData });
+            uploaded = imgRes.ok;
+          } catch (err) {
+            uploaded = false;
+          }
+        }
+        if (!uploaded) throw new Error(`Image upload failed at batch ${batchIndex + 1}`);
+        uploadedImages += batch.length;
+        setUploadProgress(`Uploading images ${uploadedImages} / ${files.images.length}...`);
+      }
 
       // 3. Upload YOLOv11 .pt Model
       const modelData = new FormData();
@@ -520,6 +551,7 @@ function Page1({ onNext, onToggleTheme, setSessionArgs }) {
       onNext();
     } catch (err) {
       setErrorMsg(err.message);
+      setUploadProgress("");
     } finally {
       setUploading(false);
     }
@@ -591,6 +623,7 @@ function Page1({ onNext, onToggleTheme, setSessionArgs }) {
           <button disabled={!ready || uploading} className="clay-btn-primary" style={{ width: "100%", padding: 16, fontSize: 15 }} onClick={handleStart}>
             {uploading ? "Uploading Assets..." : "Run YOLOv11 Inference →"}
           </button>
+          {uploadProgress && <p style={{ ...mono, fontSize: 11, color: T.textMuted, textAlign: "center", marginTop: -6 }}>{uploadProgress}</p>}
           {!ready && <p style={{ ...mono, fontSize: 11, color: T.textMuted, textAlign: "center", marginTop: -6 }}>Upload images & .pt weights to start</p>}
         </div>
       </div>

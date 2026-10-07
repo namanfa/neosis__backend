@@ -11,6 +11,11 @@ from .session_manager import get_session_dir, validate_session
 router = APIRouter()
 
 
+def _load_yolo_model(model_path):
+    from ultralytics import YOLO
+    return YOLO(model_path)
+
+
 def _get_default_batch_size():
     """Auto-detect optimal batch size based on available hardware."""
     try:
@@ -112,8 +117,12 @@ async def run_inference_generator(session_id: str, conf: float, iou: float, agno
     # Load YOLOv11 model
     yield f"data: {json.dumps({'progress': 0, 'total': total_images, 'detections': 0, 'status': 'loading_model'})}\n\n"
     try:
-        from ultralytics import YOLO
-        model = await asyncio.to_thread(YOLO, model_path)
+        model_task = asyncio.create_task(asyncio.to_thread(_load_yolo_model, model_path))
+        while not model_task.done():
+            completed, _ = await asyncio.wait({model_task}, timeout=10)
+            if not completed:
+                yield ": keepalive\n\n"
+        model = await model_task
     except Exception as e:
         yield f"data: {json.dumps({'error': f'Failed to load model: {str(e)}'})}\n\n"
         return
@@ -132,7 +141,12 @@ async def run_inference_generator(session_id: str, conf: float, iou: float, agno
 
         try:
             # Run YOLOv11 inference with class-agnostic NMS enabled
-            results = await asyncio.to_thread(model, batch_paths, conf=conf, iou=iou, agnostic_nms=agnostic_nms, verbose=False)
+            batch_task = asyncio.create_task(asyncio.to_thread(model, batch_paths, conf=conf, iou=iou, agnostic_nms=agnostic_nms, verbose=False))
+            while not batch_task.done():
+                completed, _ = await asyncio.wait({batch_task}, timeout=10)
+                if not completed:
+                    yield ": keepalive\n\n"
+            results = await batch_task
             batch_preds = results  # list of Result objects
 
             # Process each image's results
