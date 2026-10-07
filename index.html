@@ -14,11 +14,10 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <!-- Deployment & Backend Configuration -->
-    <!-- ⚠️  UPDATE THIS URL after deploying the HF Spaces backend -->
     <script>
         window.NOESIS_API_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
             ? "http://localhost:7860/api/sessions"
-            : "hhttps://neosis-backend-01.onrender.com//api/sessions";
+            : "https://neosis-backend-01.onrender.com/api/sessions";
 
         // Keep-alive ping: automatically pings /health every 10 minutes while tab is open
         (function keepAlive() {
