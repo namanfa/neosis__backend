@@ -1,5 +1,5 @@
 ---
-title: Noesis SKU Labeler Backend
+title: Neosis SKU Labeler Backend
 emoji: 🏷️
 colorFrom: blue
 colorTo: indigo
@@ -10,9 +10,9 @@ pinned: false
 hardware: cpu-basic
 ---
 
-# Noesis SKU Labeler — Backend
+# Neosis SKU Labeler — Backend
 
-FastAPI backend for the Noesis pseudo-labeling tool, running inside a Gradio Space.
+FastAPI backend for the Neosis pseudo-labeling tool, running inside a Gradio Space.
 
 The Gradio interface (visible at `/gradio`) is a lightweight status panel only.
 All real API traffic is handled by FastAPI at `/api/sessions/`.

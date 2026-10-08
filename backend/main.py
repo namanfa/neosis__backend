@@ -3,6 +3,7 @@ import threading
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 # Session directory configuration:
 # On Windows / local development, use the project's output/sessions directory.
@@ -43,7 +44,7 @@ app.add_middleware(
 
 @app.get("/health", tags=["Health"])
 def health_check():
-    return {"status": "healthy", "service": "noesis-backend"}
+    return {"status": "healthy", "service": "neosis-backend"}
 
 app.include_router(upload_handler.router, prefix="/api/sessions", tags=["Upload"])
 app.include_router(inference_engine.router, prefix="/api/sessions", tags=["Inference"])
@@ -57,6 +58,10 @@ app.include_router(converter.router, tags=["Convert"])
 frontend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 index_file = os.path.join(frontend_dir, "index.html")
 jsx_file = os.path.join(frontend_dir, "SKULabeler.jsx")
+logo_dir = os.path.join(frontend_dir, "logo")
+
+if os.path.isdir(logo_dir):
+    app.mount("/logo", StaticFiles(directory=logo_dir), name="logo")
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():

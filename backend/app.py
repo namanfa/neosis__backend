@@ -25,7 +25,7 @@ from main import app as fastapi_app
 # ── Minimal Gradio status interface ──────────────────────────────────────────
 def _get_status_text():
     return (
-        "## ✅ Noesis SKU Labeler Backend is Running\n\n"
+        "## ✅ Neosis SKU Labeler Backend is Running\n\n"
         "All API endpoints are live at `/api/sessions/`.\n\n"
         "**Interactive docs**: visit `/docs` on this Space URL.\n\n"
         "The real UI lives on Vercel — this panel is just a health indicator."
@@ -43,8 +43,8 @@ demo = gr.Interface(
     fn=get_status,
     inputs=[],
     outputs=gr.Markdown(),
-    title="Noesis Backend Status",
-    description="FastAPI inference backend for the Noesis SKU Labeler tool.",
+    title="Neosis Backend Status",
+    description="FastAPI inference backend for the Neosis SKU Labeler tool.",
     flagging_mode="never",
 )
 

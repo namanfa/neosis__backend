@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/SKULabeler.jsx", "destination": "/SKULabeler.jsx" },
+    { "source": "/logo/(.*)", "destination": "/logo/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
