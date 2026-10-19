@@ -3,11 +3,17 @@ __pycache__/
 *.pyc
 *.pyo
 venv/
+.venv/
+.python*/
+python-install.log
 .env
 deploy/.env
+logo/Favicon.png
 
 # Backend session data (never commit inference output)
 backend/output/
+output/library/
+deploy/data/library/
 *.zip
 *.log
 backend/server_out*.txt

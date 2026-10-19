@@ -4,6 +4,14 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     restart: unless-stopped
+    environment:
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      LIBRARY_DIR: ${LIBRARY_DIR:-/data/library}
+      R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-}
+      R2_BUCKET_NAME: ${R2_BUCKET_NAME:-}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+      R2_REGION: ${R2_REGION:-auto}
     volumes:
       - ./data:/data
 

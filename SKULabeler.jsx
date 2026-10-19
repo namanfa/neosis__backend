@@ -23,6 +23,7 @@ const useT = () => useContext(ThemeCtx);
 const PageCtx = createContext(1);
 
 const API_BASE_URL = window.NOESIS_API_URL || "http://localhost:8080/api/sessions";
+const API_ROOT = API_BASE_URL.replace(/\/api\/sessions\/?$/, "");
 
 function injectFonts() {
   if (document.getElementById("sku-fonts") || document.querySelector('link[href*="Plus+Jakarta+Sans"]')) return;
@@ -303,7 +304,7 @@ const buildCSS = (T) => `
   .responsive-grid { grid-template-columns:minmax(0,7fr) minmax(0,5fr) !important; }
   @media(max-width:1199px) { .setup-uploads,.setup-settings-grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:18px; } }
   @media(max-width:979px) { .neosis-steps li:not(.current) b { display:none; }.responsive-grid { grid-template-columns:1fr !important; }.infer-layout { grid-template-columns:1fr!important;grid-template-rows:auto!important;min-height:0!important; }.infer-layout .progress-card,.infer-layout .activity-card,.infer-layout > .stat-cards-container { grid-column:1!important;grid-row:auto!important; }.infer-layout .activity-card { min-height:320px; } }
-  @media(max-width:719px) { .neosis-topbar { height:96px;grid-template-columns:1fr 40px;grid-template-rows:48px 32px;gap:0 10px;padding:6px 16px; }.neosis-brand { grid-column:1;grid-row:1;gap:10px; }.brand-logo { width:136px;max-height:22px; }.brand-divider { height:24px; }.brand-title b { font-size:14px; }.brand-title small { font-size:10px; }.theme-toggle { grid-column:2;grid-row:1; }.neosis-steps { grid-column:1/3;grid-row:2;justify-content:center; }.neosis-steps li:not(.current) { display:none; }.neosis-steps li.current b::before { content:'Step '; }.neosis-steps li.current b::after { content:' of 4'; }.neosis-page-head,.neosis-content { padding-left:16px;padding-right:16px; }.neosis-page-head { padding-top:22px; }.neosis-page-head h1 { font-size:25px; }.setup-uploads { grid-template-columns:1fr; }.setup-action { margin:0 -16px;width:calc(100% + 32px)!important;padding:12px 16px;flex-direction:column;align-items:stretch; }.setup-action .action-right { align-items:stretch;flex-direction:column-reverse; }.setup-action button { width:100%; }.readiness-chips { display:none; }.stat-cards-container { display:grid!important;grid-template-columns:1fr 1fr!important; }.browser-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:10px!important; }.browser-toolbar { top:96px;gap:8px; }.sort-segment { max-width:100%; }.sort-segment button { padding:7px 6px;font-size:10px; }.image-count { margin-left:auto; }.class-dist-head { align-items:flex-start;flex-direction:column; }.class-dist-head input { width:100%;max-width:none; }.class-rows > div { font-size:12px!important; } .viewer-header { padding:6px 10px!important; }.viewer-controls { max-width:calc(100vw - 20px);gap:5px;bottom:10px; }.viewer-controls input[type=range] { width:80px; }.viewer-sidebar { display:none!important; } }
+  @media(max-width:719px) { .neosis-topbar { height:96px;grid-template-columns:1fr auto;grid-template-rows:48px 32px;gap:0 10px;padding:6px 16px; }.neosis-brand { grid-column:1;grid-row:1;gap:10px; }.brand-logo { width:136px;max-height:22px; }.brand-divider { height:24px; }.brand-title b { font-size:14px; }.brand-title small { font-size:10px; }.theme-toggle { width:34px;height:34px; }.neosis-steps { grid-column:1/3;grid-row:2;justify-content:center; }.neosis-steps li:not(.current) { display:none; }.neosis-steps li.current b::before { content:'Step '; }.neosis-steps li.current b::after { content:' of 4'; }.neosis-page-head,.neosis-content { padding-left:16px;padding-right:16px; }.neosis-page-head { padding-top:22px; }.neosis-page-head h1 { font-size:25px; }.setup-uploads { grid-template-columns:1fr; }.setup-action { margin:0 -16px;width:calc(100% + 32px)!important;padding:12px 16px;flex-direction:column;align-items:stretch; }.setup-action .action-right { align-items:stretch;flex-direction:column-reverse; }.setup-action button { width:100%; }.readiness-chips { display:none; }.stat-cards-container { display:grid!important;grid-template-columns:1fr 1fr!important; }.browser-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important;gap:10px!important; }.browser-toolbar { top:96px;gap:8px; }.sort-segment { max-width:100%; }.sort-segment button { padding:7px 6px;font-size:10px; }.image-count { margin-left:auto; }.class-dist-head { align-items:flex-start;flex-direction:column; }.class-dist-head input { width:100%;max-width:none; }.class-rows > div { font-size:12px!important; } .viewer-header { padding:6px 10px!important; }.viewer-controls { max-width:calc(100vw - 20px);gap:5px;bottom:10px; }.viewer-controls input[type=range] { width:80px; }.viewer-sidebar { display:none!important; } }
   .setup-action { position:fixed;left:0;right:0;bottom:0;z-index:200;margin:0;padding:12px max(32px,calc((100vw - 1616px)/2));width:100vw!important;max-width:none!important;background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(12px);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:16px; }
   .setup-action small { position:static; }
   .setup-layout { padding-bottom:86px; }
@@ -334,7 +335,7 @@ const lbl = (T) => ({ fontSize: 13, textTransform: "none", letterSpacing: "norma
 // ─────────────────────────────────────────────────────────────────────────────
 //  SHELL — FIELDASSIST CLAY NAVBAR & HEADER
 // ─────────────────────────────────────────────────────────────────────────────
-function Shell({ children, stepLabel, title, subtitle, actions, onToggleTheme }) {
+function Shell({ children, stepLabel, title, subtitle, actions, onToggleTheme, showSteps = true }) {
   const T = useT();
   const currentPage = useContext(PageCtx);
   const stepNames = ["Upload", "Inference", "Results", "Browse"];
@@ -346,8 +347,13 @@ function Shell({ children, stepLabel, title, subtitle, actions, onToggleTheme })
         <span className="brand-divider" />
         <span className="brand-title"><b>NEOSIS</b><small>SKU Labeler</small></span>
       </div>
-      <ol className="neosis-steps" aria-label="Progress">{stepNames.map((name,i)=><li key={name} className={currentPage===i+1?"current":currentPage>i+1?"done":""} aria-current={currentPage===i+1?"step":undefined}><span>{currentPage>i+1?"✓":i+1}</span><b><span className="step-label">{name}</span><small className="step-mobile">Step {i+1} of 4 · {name}</small></b></li>)}</ol>
-      <button className="theme-toggle" onClick={onToggleTheme} aria-label="Switch between light and dark theme" title={T.mode === "dark" ? "Switch to light theme" : "Switch to dark theme"}>{T.mode === "dark" ? "☀" : "☾"}</button>
+      {showSteps ? <ol className="neosis-steps" aria-label="Progress">{stepNames.map((name,i)=><li key={name} className={currentPage===i+1?"current":currentPage>i+1?"done":""} aria-current={currentPage===i+1?"step":undefined}><span>{currentPage>i+1?"✓":i+1}</span><b><span className="step-label">{name}</span><small className="step-mobile">Step {i+1} of 4 · {name}</small></b></li>)}</ol> : <div />}
+      <div style={{ justifySelf:"end", display:"flex", alignItems:"center", gap:8 }}>
+        <select aria-label="Navigate to tool" value={currentPage===1||currentPage===2||currentPage===3||currentPage===4?"#/labeler":currentPage===5?"#/extract":currentPage===6?"#/testing-images":currentPage===7?"#/packshots":"#/"} onChange={event=>{window.location.hash=event.target.value;}} style={{ maxWidth:170, padding:"9px 10px", borderRadius:10, border:"1px solid var(--border-strong)", color:"var(--text-2)", background:"var(--surface)", fontSize:12, fontWeight:700 }}>
+          <option value="#/">Home</option><option value="#/labeler">Pseudo Labelling</option><option value="#/extract">Image Extraction</option><option value="#/testing-images">Testing Images</option><option value="#/packshots">Packshots</option>
+        </select>
+        <button className="theme-toggle" onClick={onToggleTheme} aria-label="Switch between light and dark theme" title={T.mode === "dark" ? "Switch to light theme" : "Switch to dark theme"}>{T.mode === "dark" ? "☀" : "☾"}</button>
+      </div>
     </nav>
     {title && <header className="neosis-page-head"><div><h1>{title}</h1>{subtitle && <p>{subtitle}</p>}</div>{actions && <div className="page-actions">{actions}</div>}</header>}
     <main className="neosis-content page-enter">{children}</main>
@@ -1260,8 +1266,93 @@ function Page4({ onBack, onToggleTheme, sessionId, analyticsData, initialQuickFi
 // ─────────────────────────────────────────────────────────────────────────────
 //  APP ROOT
 // ─────────────────────────────────────────────────────────────────────────────
+function ImageExtractionPage({ onToggleTheme, onBack }) {
+  const T = useT();
+  const [file, setFile] = useState(null);
+  const [columns, setColumns] = useState([]);
+  const [columnIndex, setColumnIndex] = useState("");
+  const [loadingColumns, setLoadingColumns] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState({ progress:0, total:0 });
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+
+  const selectFile = async (nextFile) => {
+    setFile(nextFile); setColumns([]); setColumnIndex(""); setResult(null); setError("");
+    if (!nextFile) return;
+    setLoadingColumns(true);
+    try {
+      const body = new FormData(); body.append("file", nextFile);
+      const response = await fetch(`${API_ROOT}/api/extract/columns`, { method:"POST", body });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Could not read spreadsheet");
+      setColumns(data.columns || []);
+      if (!data.columns?.length) throw new Error("No columns were found in the first row");
+    } catch (err) { setError(err.message || "Could not read spreadsheet"); }
+    finally { setLoadingColumns(false); }
+  };
+
+  const startDownload = async () => {
+    if (!file || columnIndex === "") return;
+    setRunning(true); setResult(null); setError(""); setProgress({ progress:0, total:0 });
+    try {
+      const body = new FormData(); body.append("file", file); body.append("column_index", columnIndex);
+      const response = await fetch(`${API_ROOT}/api/extract/run`, { method:"POST", body });
+      if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.detail || "Image extraction could not start"); }
+      const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ""; let finished = false;
+      while (!finished) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream:!done });
+        const events = buffer.split("\n\n"); buffer = events.pop() || "";
+        for (const event of events) {
+          const line = event.split("\n").find(part => part.startsWith("data: "));
+          if (!line) continue;
+          const data = JSON.parse(line.slice(6));
+          if (data.error) throw new Error(data.error);
+          if (data.progress !== undefined) setProgress({ progress:data.progress, total:data.total });
+          if (data.done) { setResult(data); finished = true; }
+        }
+        if (done) finished = true;
+      }
+    } catch (err) { setError(err.message || "Image extraction failed"); }
+    finally { setRunning(false); }
+  };
+
+  return <Shell title="Image Extraction" subtitle="Choose a spreadsheet column containing public image links, then download the images as a ZIP." onToggleTheme={onToggleTheme} showSteps={false} actions={<button className="clay-btn-secondary" onClick={onBack}>← Back to Labeler</button>}>
+    <section className="clay-card" style={{ maxWidth:900, margin:"0 auto", padding:28 }}>
+      <div style={{ marginBottom:24 }}>
+        <label style={lbl(T)} htmlFor="extract-sheet">1. Choose an Excel or CSV file</label>
+        <input id="extract-sheet" type="file" accept=".xlsx,.csv" onChange={e=>selectFile(e.target.files?.[0] || null)} style={{ display:"block", width:"100%", padding:14, border:`1px dashed ${T.accentBorder}`, borderRadius:12, background:T.wellBg, color:T.text }} />
+        {file && <p style={{ marginTop:8, color:T.textSub, fontSize:13 }}>{file.name}</p>}
+      </div>
+      {loadingColumns && <p style={{ color:T.textSub, marginBottom:20 }}>Reading spreadsheet headers…</p>}
+      {columns.length > 0 && <div style={{ marginBottom:24 }}>
+        <label style={lbl(T)} htmlFor="extract-column">2. Select the column that contains image links</label>
+        <select id="extract-column" value={columnIndex} onChange={e=>{setColumnIndex(e.target.value);setResult(null);setError("");}} style={{ width:"100%", padding:"12px 14px", borderRadius:10, border:`1px solid ${T.accentBorder}`, background:T.wellBg, color:T.text, fontSize:14 }}>
+          <option value="">Choose a column…</option>
+          {columns.map(col=><option key={col.index} value={col.index}>{col.name}</option>)}
+        </select>
+      </div>}
+      {error && <div role="alert" className="upload-error-banner" style={{ marginBottom:18 }}><strong>Could not complete extraction</strong><span>{error}</span></div>}
+      {running && <div style={{ marginBottom:20 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8, fontSize:13, color:T.textSub }}><span>Downloading images…</span><span>{progress.progress} / {progress.total}</span></div>
+        <progress value={progress.progress} max={Math.max(progress.total,1)} style={{ width:"100%", height:12, accentColor:T.accent }} />
+      </div>}
+      {result && <div style={{ borderRadius:12, padding:16, marginBottom:20, background:T.wellBg, color:T.text }}>
+        <strong>Extraction complete</strong>
+        <p style={{ marginTop:8, color:T.textSub }}>{result.saved} downloaded · {result.failed?.length || 0} failed</p>
+        <a className="clay-btn-primary" style={{ display:"inline-block", marginTop:12, textDecoration:"none" }} href={`${API_ROOT}${result.download_url}`} download={result.filename}>Download {result.filename}</a>
+        {!!result.failed?.length && <details style={{ marginTop:16 }}><summary style={{ cursor:"pointer", fontWeight:700 }}>Failed links ({result.failed.length})</summary><div style={{ maxHeight:280, overflow:"auto", marginTop:10 }}>{result.failed.map((item,i)=><p key={i} style={{ padding:"8px 0", borderTop:`1px solid ${T.cardBorder}`, fontSize:12, overflowWrap:"anywhere" }}>Excel row {item.row}{item.link ? `, link ${item.link}` : ""}: {item.error} <span style={{ color:T.textMuted }}>{item.url}</span></p>)}</div></details>}
+      </div>}
+      <button className="clay-btn-primary" onClick={startDownload} disabled={!file || columnIndex === "" || running || loadingColumns}>{running ? "Downloading…" : "Download images as ZIP"}</button>
+      <p style={{ marginTop:14, fontSize:12, lineHeight:1.6, color:T.textMuted }}>Links must be public direct image URLs. The selected column is read from the spreadsheet’s first row of headers.</p>
+    </section>
+  </Shell>;
+}
+
 function App() {
-  const [page,       setPage]     = useState(1);
+  const routePage = () => ({ "#/labeler":1, "#/extract":5, "#/testing-images":6, "#/packshots":7, "#/":8, "":8 }[window.location.hash] || 8);
+  const [page,       setPage]     = useState(routePage);
   const [browseInitialFilter, setBrowseInitialFilter] = useState("all");
   const [isDark,     setDark]     = useState(() => {
     let selected;
@@ -1285,6 +1376,12 @@ function App() {
 
   useEffect(() => { injectFonts(); }, []);
 
+  useEffect(() => {
+    const handleHash = () => setPage(routePage());
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
+
   return (
     <PageCtx.Provider value={page}>
       <ThemeCtx.Provider value={theme}>
@@ -1292,6 +1389,10 @@ function App() {
         {page === 2 && <Page2 onNext={() => setPage(3)} onBack={() => setPage(1)} onToggleTheme={() => setDark(d => !d)} sessionId={sessionId} conf={conf} iou={iou} agnosticNms={agnosticNms} />}
         {page === 3 && <Page3 onViewImages={(filter="all") => { setBrowseInitialFilter(filter); setPage(4); }} onRerun={() => setPage(1)} onToggleTheme={() => setDark(d => !d)} sessionId={sessionId} setAnalyticsData={setAdvData} />}
         {page === 4 && <Page4 onBack={() => setPage(3)} onToggleTheme={() => setDark(d => !d)} sessionId={sessionId} analyticsData={advData} initialQuickFilter={browseInitialFilter} />}
+        {page === 5 && <ImageExtractionPage onBack={() => { window.location.hash = "#/labeler"; }} onToggleTheme={() => setDark(d => !d)} />}
+        {page === 6 && <window.NeosisToolkit.TestingImagesPage Shell={Shell} onToggleTheme={() => setDark(d => !d)} />}
+        {page === 7 && <window.NeosisToolkit.PackshotsPage Shell={Shell} onToggleTheme={() => setDark(d => !d)} />}
+        {page === 8 && <window.NeosisToolkit.HomePage Shell={Shell} onToggleTheme={() => setDark(d => !d)} />}
       </ThemeCtx.Provider>
     </PageCtx.Provider>
   );

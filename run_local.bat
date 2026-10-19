@@ -7,9 +7,13 @@ echo.
 
 cd /d "%~dp0"
 
-if not exist "venv\Scripts\python.exe" (
-    echo [ERROR] Virtual environment not found in venv\
-    echo Please ensure the virtual environment is set up.
+if exist ".venv\Scripts\python.exe" (
+    set "PYTHON=.venv\Scripts\python.exe"
+) else if exist "venv\Scripts\python.exe" (
+    set "PYTHON=venv\Scripts\python.exe"
+) else (
+    echo [ERROR] Python environment not found.
+    echo Run .\setup_env.ps1 in PowerShell to create it.
     pause
     exit /b 1
 )
@@ -23,5 +27,5 @@ echo (Press CTRL+C to stop the server)
 echo.
 
 cd backend
-..\venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 7860
+..\%PYTHON% -m uvicorn main:app --host 127.0.0.1 --port 7860
 pause

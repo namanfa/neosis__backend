@@ -1,9 +1,15 @@
 import os
 import threading
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
+# Local runs can keep credentials in the ignored deploy/.env file. Compose passes
+# its environment directly, so these file values never override deployment vars.
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+load_dotenv(os.path.join(project_root, "deploy", ".env"), override=False)
 
 # Session directory configuration:
 # On Windows / local development, use the project's output/sessions directory.
@@ -17,9 +23,13 @@ if not os.environ.get("SESSION_BASE_DIR"):
 SESSION_BASE_DIR = os.environ["SESSION_BASE_DIR"]
 os.makedirs(SESSION_BASE_DIR, exist_ok=True)
 
-from services import upload_handler, inference_engine, analytics, preview, export, converter
+from services import upload_handler, inference_engine, analytics, preview, export, converter, image_extraction, library, toolkit_library
+from storage import get_storage
+from storage.brands import get_brands
 
 app = FastAPI(title="SKU Labeler API")
+app.state.storage = get_storage()
+get_brands(app.state.storage)
 
 
 def _warm_inference_imports():
@@ -53,11 +63,15 @@ app.include_router(preview.router, prefix="/api/sessions", tags=["Preview"])
 app.include_router(export.router, prefix="/api/sessions", tags=["Export"])
 # Stateless .pt → .onnx conversion endpoint (no session needed)
 app.include_router(converter.router, tags=["Convert"])
+app.include_router(image_extraction.router, tags=["Image Extraction"])
+app.include_router(library.router, tags=["Library Storage"])
+app.include_router(toolkit_library.router)
 
 # Serve frontend for local operation if files are present
 frontend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 index_file = os.path.join(frontend_dir, "index.html")
 jsx_file = os.path.join(frontend_dir, "SKULabeler.jsx")
+toolkit_jsx_file = os.path.join(frontend_dir, "ToolkitPages.jsx")
 logo_dir = os.path.join(frontend_dir, "logo")
 
 if os.path.isdir(logo_dir):
@@ -78,6 +92,11 @@ if os.path.exists(jsx_file):
     @app.get("/SKULabeler.jsx", include_in_schema=False)
     async def serve_jsx():
         return FileResponse(jsx_file, media_type="text/javascript")
+
+if os.path.exists(toolkit_jsx_file):
+    @app.get("/ToolkitPages.jsx", include_in_schema=False)
+    async def serve_toolkit_jsx():
+        return FileResponse(toolkit_jsx_file, media_type="text/javascript")
 
 
 if __name__ == "__main__":

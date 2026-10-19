@@ -107,7 +107,31 @@ docker compose up -d --build
 docker compose ps
 ```
 
-The app listens only inside the Compose network on port `7860`. Caddy publishes ports `80` and `443`, obtains and renews HTTPS certificates, and proxies requests to the app. The UI and API share `https://faneosis.duckdns.org`.
+The app listens only inside the Compose network on port `7860`. Caddy publishes ports `80` and `443`, obtains and renews HTTPS certificates, and proxies requests to the app. The UI and API share `https://faneosis.duckdns.org`. The Docker Compose setup mounts `deploy/data` at `/data`; temporary Labeler sessions use `/data/sessions`, while the persistent image library uses `/data/library` with `STORAGE_BACKEND=local` by default.
+
+## Use Cloudflare R2 for the shared image library
+
+The R2 adapter is selected with `STORAGE_BACKEND=r2`. In `deploy/.env`, set:
+
+```dotenv
+STORAGE_BACKEND=r2
+R2_ENDPOINT_URL=https://ac88413dc5847b0e11784fbc87b2c205.r2.cloudflarestorage.com
+R2_BUCKET_NAME=neosis-image-library
+R2_ACCESS_KEY_ID=your_access_key_id
+R2_SECRET_ACCESS_KEY=your_secret_access_key
+R2_REGION=auto
+```
+
+Use an R2 API token with **Object Read & Write**, scoped to this bucket. The endpoint is the account-level S3 endpoint; the bucket name is configured separately. Keep `deploy/.env` private. It is excluded from Git and the Docker build context. Do not enable public bucket access: the app creates short-lived signed read links for private images.
+
+Then rebuild the app from `deploy/`:
+
+```bash
+docker compose up -d --build
+docker compose logs -f app
+```
+
+This switches the shared Testing Images and Packshots library to R2. Existing files under `output/library` or `deploy/data/library` are not copied automatically; migrate them before switching if you need to keep them. Labeler session uploads and temporary Image Extraction jobs remain on the app's local session storage and are not moved to R2 by this setting.
 
 Open `https://faneosis.duckdns.org` in a browser and sign in with `AUTH_USER` and the password used to generate `AUTH_HASH`. The app's health endpoint is also protected by the same login:
 

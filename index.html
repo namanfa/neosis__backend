@@ -74,21 +74,17 @@
     <script>
         (async function() {
             try {
+                const toolkitResponse = await fetch("ToolkitPages.jsx");
+                if (!toolkitResponse.ok) throw new Error("Failed to load toolkit pages: " + toolkitResponse.status + " " + toolkitResponse.statusText);
+                const toolkitSource = await toolkitResponse.text();
+                const toolkitCompiled = Babel.transform(toolkitSource, { presets: [['react', { runtime: 'classic' }]] }).code;
+                new Function(toolkitCompiled)();
+
                 const response = await fetch("SKULabeler.jsx");
-                if (!response.ok) {
-                    throw new Error("Failed to load application source: " + response.status + " " + response.statusText);
-                }
+                if (!response.ok) throw new Error("Failed to load application source: " + response.status + " " + response.statusText);
                 const jsxSource = await response.text();
-                // Transpile using classic JSX runtime to avoid ES module import injection
-                const compiled = Babel.transform(jsxSource, {
-                    presets: [
-                        ['react', { runtime: 'classic' }]
-                    ]
-                }).code;
-                
-                // Execute compiled React app
-                const runScript = new Function(compiled);
-                runScript();
+                const compiled = Babel.transform(jsxSource, { presets: [['react', { runtime: 'classic' }]] }).code;
+                new Function(compiled)();
             } catch (err) {
                 console.error("Initialization error:", err);
                 const root = document.getElementById("root");
