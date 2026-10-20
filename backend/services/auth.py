@@ -287,7 +287,8 @@ class AuthMiddleware:
         self.public_paths = {
             "/health", "/login", "/login.html", "/auth/login", "/auth/callback",
             "/auth/me", "/auth/logout", "/logo/FieldAssistLogoColoured.svg",
-            "/logo/ir-tool-mark.svg", "/favicon.ico",
+            "/logo/ir-tool-mark.svg", "/logo/neosis-mark.svg",
+            "/logo/fa-icon-blue.png", "/logo/fa-wordmark-blue.png", "/favicon.ico",
         }
 
     async def __call__(self, scope, receive, send):

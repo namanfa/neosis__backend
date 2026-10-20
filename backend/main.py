@@ -87,6 +87,16 @@ app.include_router(library.router, tags=["Library Storage"])
 app.include_router(toolkit_library.router)
 app.include_router(auth.router)
 
+# These source files are compiled by the browser, so always revalidate them and
+# the app shell before reuse. This prevents a cached page from mixing releases.
+@app.middleware("http")
+async def revalidate_frontend_assets(request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path in {"/", "/index.html", "/login", "/login.html", "/favicon.ico", "/SKULabeler.jsx", "/ToolkitPages.jsx"} or path.startswith("/logo/"):
+        response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
+    return response
+
 # Serve frontend for local operation if files are present
 frontend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 index_file = os.path.join(frontend_dir, "index.html")

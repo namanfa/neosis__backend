@@ -34,25 +34,12 @@ function injectFonts() {
 }
 
 const buildCSS = (T) => `
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: ${T.bg}; color: ${T.text}; transition: background 0.3s, color 0.3s; font-family: 'Inter', sans-serif; }
+  *,*::before,*::after { box-sizing: border-box; }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: ${T.accentBorder}; border-radius: 4px; }
   
-  /* Claymorphic Utility Classes */
-  .clay-card {
-    background: ${T.clayBg};
-    border-radius: 20px;
-    box-shadow: 8px 8px 20px ${T.shadowDark}, -8px -8px 20px ${T.shadowLight}, inset 1px 1px 2px ${T.highlight};
-    border: 1px solid ${T.cardBorder};
-    transition: all 0.25s ease;
-  }
-  
-  .clay-card-interactive:hover {
-    transform: translateY(-3px);
-    box-shadow: 12px 12px 28px ${T.shadowDark}, -10px -10px 24px ${T.shadowLight}, inset 1px 1px 2px ${T.highlight};
-  }
+  /* Neosis card surfaces and interaction styles are defined in IR_DESIGN_CSS. */
   
   .clay-well {
     background: ${T.wellBg};
@@ -326,7 +313,6 @@ const buildCSS = (T) => `
   .histogram-bars { height:190px!important; }
   .neosis-content .responsive-grid > div > .clay-card { min-height:300px; }
   @media(max-width:719px) { .setup-uploads > .upload-zone { min-height:280px; }.setup-uploads > .upload-zone .upload-drop { min-height:180px; }.class-dist-card { min-height:300px; }.neosis-content .responsive-grid > div > .clay-card { min-height:260px; }.browser-grid { margin-top:12px!important; } }
-  @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important; } }
 `;
 
 const mono = { fontFamily: "'Plus Jakarta Sans', sans-serif" };
@@ -341,6 +327,7 @@ const APP_NAV_ITEMS = [
   { title:"Model Dashboard", icon:"dashboard", soon:true },
   { title:"Accuracy Doc", icon:"accuracy", soon:true },
 ];
+const NEOSIS_BRAND_NAME = window.NEOSIS_BRAND_NAME || "Neosis";
 
 function StrokeIcon({ name, size=18 }) {
   const paths={menu:<path d="M4 6h16M4 12h16M4 18h16"/>,close:<path d="m6 6 12 12M18 6 6 18"/>,sun:<><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></>,moon:<path d="M20.9 13A8.9 8.9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/>,arrow:<path d="M5 12h14m-6-6 6 6-6 6"/>,check:<path d="m5 12 4 4L19 6"/>,home:<path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V11z"/>,label:<><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8m-8 4h5"/></>,extract:<><path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/></>,testing:<><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 15-5-5L5 20"/></>,packshots:<><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M3 8v10l9 5 9-5V8M12 13v10"/></>,dashboard:<><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7"/></>,accuracy:<><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5m-9 5 2 2 4-4"/></>};
@@ -366,21 +353,23 @@ const IR_DESIGN_CSS = `
   .app-drawer-backdrop { position:fixed;inset:0;z-index:6000;background:rgba(15,23,42,.45); }.app-drawer { position:fixed;inset:0 auto 0 0;z-index:6001;width:290px;max-width:86vw;padding:14px;display:flex;flex-direction:column;gap:2px;background:var(--surface);border-right:1px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,.3);animation:drawer-in .15s ease-out; }.app-drawer-head { padding:0 4px 12px;border-bottom:1px solid var(--border);margin-bottom:4px;display:flex;justify-content:space-between;align-items:center; }.app-drawer-nav { display:grid;gap:4px;padding-top:8px; }.app-drawer-nav .app-menu-item { justify-content:flex-start;padding:10px 12px; }.app-drawer-nav .app-menu-item>span { margin-left:auto;color:var(--text-3);font-size:11px;font-weight:600; }.app-drawer-nav .app-menu-item>svg { color:var(--text-3);flex:none; }.app-drawer-foot { margin-top:auto;padding:12px;border-top:1px solid var(--border);color:var(--text-3);font-size:12.5px; }.app-drawer-foot img { display:block;width:104px;max-height:25px;object-fit:contain;object-position:left;margin-bottom:10px; }
   @keyframes drawer-in { from{transform:translateX(-12px);opacity:.75}to{transform:translateX(0);opacity:1} }
   .workflow-progress { max-width:1360px;margin:18px auto 0;padding:0 40px; }.workflow-progress .neosis-steps { position:static;justify-content:center; }
-  .neosis-page-head { max-width:1360px;margin:0 auto;padding:36px 40px 0!important; }.neosis-page-head h1 { margin:0;font:800 28px/1.2 'Plus Jakarta Sans',sans-serif!important;letter-spacing:-.015em; }.neosis-page-head p { margin:6px 0 0;color:var(--text-2)!important;font-size:14.5px;line-height:1.5;max-width:70ch; }.neosis-content { max-width:1360px!important;margin:0 auto!important;padding:18px 40px 64px!important; }
+  .neosis-page-head { max-width:1360px;margin:0 auto;padding:36px 40px 0!important; }.neosis-page-head h1 { margin:0;font:800 28px/1.2 'Plus Jakarta Sans',sans-serif!important;letter-spacing:-.015em; }.neosis-page-head[data-page="Dashboard"] h1 { font-size:32px!important; }.neosis-page-head p { margin:6px 0 0;color:var(--text-2)!important;font-size:14.5px;line-height:1.5;max-width:70ch; }.neosis-content { max-width:1360px!important;margin:0 auto!important;padding:18px 40px 64px!important; }
   .clay-card { border-radius:14px!important;border:1px solid var(--border)!important;background:var(--surface)!important;box-shadow:var(--shadow)!important;transition:transform .15s,border-color .15s,box-shadow .15s!important; }.clay-card-interactive:hover { transform:translateY(-2px)!important;border-color:var(--primary)!important;box-shadow:0 8px 24px rgba(85,69,245,.12)!important; }
   .clay-btn-primary,.clay-btn-secondary { height:40px;padding:0 16px;font:700 13.5px 'Plus Jakarta Sans',sans-serif!important;letter-spacing:0!important; }
   .clay-btn-primary { border:1px solid var(--primary)!important;border-radius:10px!important;background:var(--primary)!important;color:var(--on-primary)!important;box-shadow:none!important;transition:background .15s,border-color .15s,transform .15s!important; }.clay-btn-primary:hover { background:var(--primary-hover)!important;filter:none!important;transform:translateY(-1px)!important;box-shadow:none!important; }.clay-btn-secondary { border:1px solid var(--border-strong)!important;border-radius:10px!important;background:var(--surface)!important;color:var(--text-2)!important;box-shadow:none!important;transition:background .15s,border-color .15s!important; }.clay-btn-secondary:hover { border-color:var(--border-strong)!important;background:var(--surface-3)!important;color:var(--text-2)!important; }
   .clay-btn-primary:focus-visible,.clay-btn-secondary:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible { outline:none;box-shadow:var(--focus)!important; }.clay-btn-primary:disabled,.clay-btn-secondary:disabled { opacity:.55;cursor:not-allowed;transform:none!important; }
-  input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea { border-radius:10px!important;color:var(--text)!important;background:var(--surface)!important; }.neosis-page-head p { color:var(--text-2)!important; }
+  input:not([type=checkbox]):not([type=radio]):not([type=file]):not(.app-search),select,textarea { border-radius:10px!important;color:var(--text)!important;background:var(--surface)!important; }.app-search { border:0!important;border-radius:0!important;background:transparent!important; }.neosis-page-head p { color:var(--text-2)!important; }
   @media(max-width:1100px) { .neosis-topbar { grid-template-columns:auto minmax(0,1fr) auto!important; }.dashboard-core-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.dashboard-utility-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-  @media(max-width:720px) { .neosis-topbar { grid-template-columns:auto minmax(0,1fr) auto!important;height:62px!important;padding:0 10px!important;gap:8px!important; }.app-brand-link>span { display:none; }.app-nav-left { gap:6px; }.app-nav-right { gap:4px; }.workflow-progress,.neosis-page-head,.neosis-content { padding-left:16px!important;padding-right:16px!important; }.workflow-progress { margin-top:12px; }.neosis-page-head { padding-top:22px!important; }.neosis-page-head h1 { font-size:28px!important; }.page-actions { justify-content:flex-start!important; }.dashboard-core-grid,.dashboard-utility-grid { grid-template-columns:1fr; }.dashboard-utilities { padding:10px; } }
-  .dashboard-section-title { display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:19px;font-weight:800;color:var(--text); }.dashboard-section-title svg { color:var(--primary);flex:none; }.dashboard-core-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px; }.dashboard-workflow { min-height:0;padding:20px 22px;display:flex;flex-direction:column;align-items:stretch;gap:10px;text-align:left;color:var(--text);cursor:pointer;text-decoration:none; }.dashboard-icon { width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--primary-soft);color:var(--primary);flex:none; }.dashboard-workflow strong,.dashboard-workflow small { display:block; }.dashboard-workflow strong { font-size:16.5px;font-weight:800; }.dashboard-workflow small { margin-top:0;color:var(--text-2);font-size:14px;line-height:1.5; }.dashboard-utilities { margin-top:34px;padding:0;border:0;border-radius:0;background:transparent; }.dashboard-utility-panel { padding:10px!important; }.dashboard-utility-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px; }.dashboard-utility { min-height:0;padding:16px;display:flex;align-items:center;gap:14px;border:0;border-radius:10px;background:transparent;color:var(--text);text-align:left; }.dashboard-utility:hover:enabled { background:var(--surface-3); }.dashboard-utility-icon { width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--primary-soft);color:var(--primary);flex:none; }.dashboard-utility-copy { min-width:0; }.dashboard-utility strong { display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800; }.dashboard-utility small { display:block;margin-top:2px;color:var(--text-3);font-size:13px;line-height:1.4; }.dashboard-utility em { padding:4px 10px;border-radius:999px;background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--warn);font-size:11.5px;font-style:normal;font-weight:700;white-space:nowrap; }.dashboard-utility:disabled { opacity:1;cursor:not-allowed; }.dashboard-utility:disabled .dashboard-utility-icon { background:var(--surface-3);color:var(--text-3); }.dashboard-utility:disabled strong { color:var(--text-2); }.dashboard-empty { max-width:560px;margin:12px auto;padding:56px 24px;text-align:center; }.dashboard-empty h2 { margin:0 0 6px;font-size:18px; }.dashboard-empty p { margin:0;color:var(--text-2); }
+  @media(max-width:720px) { .neosis-topbar { grid-template-columns:auto minmax(0,1fr) auto!important;height:62px!important;padding:0 10px!important;gap:8px!important; }.app-brand-link>span { display:none; }.app-nav-left { gap:6px; }.app-nav-right { gap:4px; }.workflow-progress,.neosis-page-head,.neosis-content { padding-left:16px!important;padding-right:16px!important; }.workflow-progress { margin-top:12px; }.neosis-page-head { padding-top:22px!important; }.neosis-page-head h1 { font-size:28px!important; }.page-actions { justify-content:flex-start!important; }.dashboard-core-grid,.dashboard-utility-grid { grid-template-columns:1fr; } }
+  .neosis-page-title { min-width:0; }.neosis-back-link { display:inline-flex;align-items:center;gap:6px;margin:0 0 8px;padding:0;border:0;background:transparent;color:var(--text-2);font:600 13px 'Plus Jakarta Sans',sans-serif;cursor:pointer; }.neosis-back-link:hover { color:var(--primary); }
+  .dashboard-section-title { display:flex;align-items:center;gap:10px;margin:0 0 14px;font-size:19px;font-weight:800;color:var(--text); }.dashboard-section-title svg { color:var(--primary);flex:none; }.dashboard-section + .dashboard-section { margin-top:34px; }.dashboard-core-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px; }.dashboard-workflow { min-height:0;padding:20px 22px;display:flex;flex-direction:column;align-items:stretch;gap:10px;text-align:left;color:var(--text);cursor:pointer;text-decoration:none; }.dashboard-workflow-top { display:flex;align-items:center;gap:12px; }.dashboard-icon { width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--primary-soft);color:var(--primary);flex:none; }.dashboard-workflow strong,.dashboard-workflow small { display:block; }.dashboard-workflow strong { font-size:16.5px;font-weight:800; }.dashboard-workflow small { margin-top:0;color:var(--text-2);font-size:14px;line-height:1.5; }.dashboard-utilities { padding:0;border:0;border-radius:0;background:transparent; }.dashboard-utility-panel { padding:10px!important; }.dashboard-utility-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px; }.dashboard-utility { min-height:0;padding:16px;display:flex;align-items:center;gap:14px;border:0;border-radius:10px;background:transparent;color:var(--text);text-align:left; }.dashboard-utility:hover:enabled { background:var(--surface-3); }.dashboard-utility-icon { width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--primary-soft);color:var(--primary);flex:none; }.dashboard-utility-copy { min-width:0; }.dashboard-utility strong { display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800; }.dashboard-utility small { display:block;margin-top:2px;color:var(--text-3);font-size:13px;line-height:1.4; }.dashboard-utility em { padding:4px 10px;border-radius:999px;background:var(--warn-soft);border:1px solid var(--warn-line);color:var(--warn);font-size:11.5px;font-style:normal;font-weight:700;white-space:nowrap; }.dashboard-utility:disabled { opacity:1;cursor:not-allowed; }.dashboard-utility:disabled .dashboard-utility-icon { background:var(--surface-3);color:var(--text-3); }.dashboard-utility:disabled strong { color:var(--text-2); }.dashboard-empty { max-width:560px;margin:12px auto;padding:56px 24px;text-align:center; }.dashboard-empty h2 { margin:0 0 6px;font-size:18px; }.dashboard-empty p { margin:0;color:var(--text-2); }
+  .ir-seg { display:inline-flex;overflow:hidden;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface); }.ir-seg button { min-height:34px;padding:8px 14px;border:0;border-right:1px solid var(--border);background:var(--surface);color:var(--text-2);font:700 12.5px 'Plus Jakarta Sans',sans-serif;cursor:pointer; }.ir-seg button:last-child { border-right:0; }.ir-seg button[aria-pressed="true"] { background:var(--primary-soft);color:var(--primary); }.ir-seg button:focus-visible { position:relative;z-index:1;outline:0;box-shadow:inset 0 0 0 2px var(--primary),var(--focus); }
   .neosis-select-trigger { width:100%;height:44px;padding:0 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface);color:var(--text);font:500 14px 'Plus Jakarta Sans',sans-serif;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s; }.neosis-select-trigger:hover:not(:disabled),.neosis-select-trigger[aria-expanded=true] { border-color:var(--primary); }.neosis-select-trigger:focus-visible,.neosis-select-option:focus-visible { outline:none;box-shadow:var(--focus); }.neosis-select-chevron { color:var(--text-3);transition:transform .15s; }.neosis-select-chevron.open { transform:rotate(180deg);color:var(--primary); }.neosis-select-menu { padding:6px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);box-shadow:0 12px 36px rgba(15,23,42,.22); }.neosis-select-option { width:100%;min-height:38px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;border:0;border-radius:8px;background:transparent;color:var(--text);font:500 14px 'Plus Jakarta Sans',sans-serif;text-align:left;cursor:pointer; }.neosis-select-option:hover,.neosis-select-option[aria-selected=true] { background:var(--surface-3);color:var(--text); }.neosis-select-option[aria-selected=true] svg,.neosis-select-option.action { color:var(--primary);font-weight:700; }.neosis-select-option:disabled { opacity:.5;cursor:not-allowed; }.neosis-select-separator { height:1px;margin:6px 4px;background:var(--border); }
   .neosis-shell .setup-uploads { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;align-items:stretch; }
   .neosis-shell .setup-uploads > .upload-zone { min-height:0;padding:20px;display:flex;flex-direction:column; }
   .neosis-shell .setup-uploads > .upload-zone .upload-drop { flex:none;height:200px;min-height:0;padding:16px;border:1.5px dashed var(--border-strong);border-radius:12px;background:var(--surface-2); }
   .neosis-shell .upload-drop.filled { border-style:solid;border-color:color-mix(in srgb,var(--success) 40%,var(--border));background:var(--success-soft); }
-  .neosis-shell .setup-action { position:static;margin:0;padding:14px 0;width:100%!important;background:transparent;border-top:1px solid var(--border);backdrop-filter:none; }
+  .neosis-shell .setup-action { position:sticky;bottom:0;z-index:20;margin:0 calc(50% - 50vw);padding:12px max(40px,calc((100vw - 1280px)/2));width:100vw!important;max-width:none!important;background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(12px);border-top:1px solid var(--border); }
   .neosis-shell .setup-layout { padding-bottom:0; }
   .neosis-shell .neosis-page-head,.neosis-shell .neosis-content { width:100%;max-width:1360px;padding-left:40px!important;padding-right:40px!important; }
   .neosis-shell .neosis-content > div,.neosis-shell .neosis-content > div[style*="max-width"] { width:100%;max-width:100%!important; }
@@ -391,7 +380,7 @@ const IR_DESIGN_CSS = `
   .brand-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px; }
   .brand-card { width:100%;padding:16px!important;display:flex;align-items:center;gap:14px;text-align:left;color:var(--text)!important;font:inherit;cursor:pointer;transition:transform .15s,border-color .15s!important; }
   .brand-card:hover { transform:translateY(-2px)!important;border-color:var(--primary)!important; }.brand-mark { width:46px;height:46px;display:grid;place-items:center;flex:none;border-radius:12px;background:var(--primary-soft);color:var(--primary);font-size:15px;font-weight:800; }.brand-card-copy { min-width:0;flex:1; }.brand-card-copy b,.brand-card-copy small { display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }.brand-card-copy b { font-size:15px;font-weight:800; }.brand-card-copy small { color:var(--text-3);font-size:12.5px; }.brand-card>svg { color:var(--text-3); }
-  .toolkit-toolbar { position:sticky;top:72px;z-index:20;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px;padding:10px 12px;border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:var(--shadow); }
+  .toolkit-toolbar { position:sticky;top:72px;z-index:20;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px;padding:10px 12px;border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:var(--shadow); }.toolkit-toolbar-spacer { flex:1 1 auto; }.toolkit-toolbar-actions { display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap; }.toolkit-toolbar .toolbar-sm { height:34px;padding:0 12px;font-size:12.5px; }
   .toolkit-toolbar-filters { display:flex;align-items:center;gap:6px;flex-wrap:wrap; }.toolkit-meta { margin-left:auto;color:var(--text-2);font-size:12.5px;font-weight:600;white-space:nowrap; }
   .filter-chip { display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text-2);font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap; }.filter-chip:hover { background:var(--surface-3); }.filter-chip[aria-pressed=true] { border-color:var(--primary);background:var(--primary-soft);color:var(--primary); }
   .toolkit-filter-popover { display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;padding:14px!important; }.toolkit-filter-popover>b { margin-right:6px; }
@@ -402,15 +391,14 @@ const IR_DESIGN_CSS = `
   .toolkit-lightbox { position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px;background:#080D19;color:#EDF2FC;cursor:zoom-out; }.toolkit-lightbox>img { max-width:100%;max-height:100%;object-fit:contain;border-radius:6px; }.toolkit-lightbox>div { text-align:center; }.toolkit-lightbox>div img { max-width:95vw;max-height:82vh;object-fit:contain;border-radius:6px; }.toolkit-lightbox strong { display:block;margin-top:12px;color:#EDF2FC;font-weight:700; }
   @media(max-width:1100px) { .neosis-shell .setup-uploads,.dashboard-core-grid,.dashboard-utility-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.packshot-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } }
   @media(max-width:980px) { .packshot-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }.neosis-shell .neosis-page-head { align-items:flex-start; }.page-actions { flex-wrap:wrap;justify-content:flex-end; } }
-  @media(max-width:720px) { .neosis-shell .neosis-page-head,.neosis-shell .neosis-content,.workflow-progress { padding-left:16px!important;padding-right:16px!important; }.neosis-shell .setup-uploads,.dashboard-core-grid,.dashboard-utility-grid,.packshot-grid { grid-template-columns:1fr; }.neosis-shell .setup-action { flex-direction:column;align-items:stretch; }.toolkit-toolbar { top:62px;align-items:flex-start; }.toolkit-meta { margin-left:auto; }.testing-image-grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:10px; }.toolkit-modal-overlay { padding:20px 12px; }.toolkit-modal-body { padding:16px; }.toolkit-modal-head,.toolkit-modal-foot { padding:14px 16px; } }
-  @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important; } }
+  @media(max-width:720px) { .neosis-shell .neosis-page-head,.neosis-shell .neosis-content,.workflow-progress { padding-left:16px!important;padding-right:16px!important; }.neosis-shell .setup-uploads,.dashboard-core-grid,.dashboard-utility-grid,.packshot-grid { grid-template-columns:1fr; }.neosis-shell .setup-action { flex-direction:column;align-items:stretch; }.neosis-shell[data-workflow="labeler"] .neosis-content { padding-bottom:220px!important; }.neosis-shell[data-workflow="labeler"] .setup-action { position:fixed;left:0;right:0;bottom:0;z-index:200;margin:0;padding:12px 16px;width:100vw!important;max-width:none!important; }.toolkit-toolbar { top:62px;align-items:flex-start; }.toolkit-meta { margin-left:auto; }.testing-image-grid { grid-template-columns:repeat(2,minmax(0,1fr));gap:10px; }.toolkit-modal-overlay { padding:20px 12px; }.toolkit-modal-body { padding:16px; }.toolkit-modal-head,.toolkit-modal-foot { padding:14px 16px; } }
   @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important; } }
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  SHELL — FIELDASSIST CLAY NAVBAR & HEADER
 // ─────────────────────────────────────────────────────────────────────────────
-function Shell({ children, stepLabel, title, subtitle, actions, onToggleTheme, showSteps = true }) {
+function Shell({ children, stepLabel, title, subtitle, backLink, actions, onToggleTheme, showSteps = true }) {
   const T = useT();
   const currentPage = useContext(PageCtx);
   const stepNames = ["Upload", "Inference", "Results", "Browse"];
@@ -436,17 +424,16 @@ function Shell({ children, stepLabel, title, subtitle, actions, onToggleTheme, s
     try { await fetch("/auth/logout", { method:"POST", credentials:"same-origin" }); }
     finally { window.location.assign("/login?signed_out=1"); }
   }
-  return <div className="neosis-shell" style={{ minHeight:"100vh", background:T.bg, color:T.text }}>
-    <style>{buildCSS(T) + IR_DESIGN_CSS}</style>
+  return <div className="neosis-shell" data-workflow={showSteps?"labeler":"tool"} style={{ minHeight:"100vh", background:T.bg, color:T.text }}>
     <div className="app-nav-area" ref={navRef}>
       <nav className="neosis-topbar" aria-label="Main navigation">
         <div className="app-nav-left">
           <button className="app-hamburger" type="button" aria-label="Open navigation menu" aria-expanded={drawerOpen} onClick={()=>setDrawerOpen(value=>!value)}><StrokeIcon name="menu"/></button>
-          <a href="#/" className="app-brand-link" aria-label="IR Data Tool dashboard"><img className="app-brand-mark" src="/logo/neosis-mark.svg" alt="" /><span>IR Data Tool</span></a>
+          <a href="#/" className="app-brand-link" aria-label={NEOSIS_BRAND_NAME + " dashboard"}><img className="app-brand-mark" src="/logo/neosis-mark.svg" alt="" /><span>{NEOSIS_BRAND_NAME}</span></a>
         </div>
         <div className="app-search-wrap">
           <span className="app-search-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></span>
-          <input className="app-search" type="search" value={searchText} aria-label="Search tools and workflows" aria-expanded={searchOpen} placeholder="Search tools and workflows\u2026" onFocus={()=>setSearchOpen(true)} onChange={event=>{setSearchText(event.target.value);setSearchOpen(true);window.dispatchEvent(new CustomEvent("ir-search",{detail:event.target.value}));}} onKeyDown={event=>{if(event.key==="Enter"&&visibleItems.length&&!visibleItems[0].soon)goTo(visibleItems[0].route);}} />
+          <input className="app-search" type="search" value={searchText} aria-label="Search tools and workflows" aria-expanded={searchOpen} placeholder="Search tools and workflows…" onFocus={()=>setSearchOpen(true)} onChange={event=>{setSearchText(event.target.value);setSearchOpen(true);window.dispatchEvent(new CustomEvent("ir-search",{detail:event.target.value}));}} onKeyDown={event=>{if(event.key==="Enter"&&visibleItems.length&&!visibleItems[0].soon)goTo(visibleItems[0].route);}} />
           {searchOpen && <div className="app-search-menu" role="listbox" aria-label="Search results"><div className="app-menu-label">{searchText?"Matching workflows":"Tools and workflows"}</div>{visibleItems.length?visibleItems.map(item=><button className="app-menu-item" type="button" role="option" key={item.title} disabled={item.soon} onClick={()=>item.route&&goTo(item.route)}>{item.title}<span aria-hidden="true">{item.soon?"Coming soon":<StrokeIcon name="arrow" size={14}/>}</span></button>):<div className="app-menu-label">No matching workflows</div>}</div>}
         </div>
         <div className="app-nav-right">
@@ -456,9 +443,9 @@ function Shell({ children, stepLabel, title, subtitle, actions, onToggleTheme, s
         </div>
       </nav>
       {showSteps&&<div className="workflow-progress"><ol className="neosis-steps" aria-label="Pseudo Labelling progress">{stepNames.map((name,i)=><li key={name} className={currentPage===i+1?"current":currentPage>i+1?"done":""} aria-current={currentPage===i+1?"step":undefined}><span>{currentPage>i+1?String.fromCharCode(10003):i+1}</span><b><span className="step-label">{name}</span><small className="step-mobile">Step {i+1} of 4 {"\u00b7"} {name}</small></b></li>)}</ol></div>}
-      {drawerOpen&&<><div className="app-drawer-backdrop" aria-hidden="true" onClick={()=>setDrawerOpen(false)}></div><aside className="app-drawer" aria-label="Tool navigation"><div className="app-drawer-head"><a href="#/" className="app-brand-link" onClick={()=>goTo("#/")}><img className="app-brand-mark" src="/logo/neosis-mark.svg" alt=""/><span>IR Data Tool</span></a><button type="button" className="app-icon-btn" aria-label="Close navigation menu" onClick={()=>setDrawerOpen(false)}><StrokeIcon name="close"/></button></div><nav className="app-drawer-nav">{APP_NAV_ITEMS.map(item=><button type="button" key={item.title} disabled={item.soon} className="app-menu-item" aria-current={window.location.hash===item.route?"page":undefined} onClick={()=>item.route&&goTo(item.route)}><StrokeIcon name={item.icon} size={18}/>{item.title}<span aria-hidden="true">{item.soon?"Coming soon":<StrokeIcon name="arrow" size={14}/>}</span></button>)}</nav><div className="app-drawer-foot"><img src="/logo/fa-wordmark-blue.png" alt="FieldAssist"/>Internal tools</div></aside></>}
+      {drawerOpen&&<><div className="app-drawer-backdrop" aria-hidden="true" onClick={()=>setDrawerOpen(false)}></div><aside className="app-drawer" aria-label="Tool navigation"><div className="app-drawer-head"><a href="#/" className="app-brand-link" onClick={()=>goTo("#/")}><img className="app-brand-mark" src="/logo/neosis-mark.svg" alt=""/><span>{NEOSIS_BRAND_NAME}</span></a><button type="button" className="app-icon-btn" aria-label="Close navigation menu" onClick={()=>setDrawerOpen(false)}><StrokeIcon name="close"/></button></div><nav className="app-drawer-nav">{APP_NAV_ITEMS.map(item=><button type="button" key={item.title} disabled={item.soon} className="app-menu-item" aria-current={window.location.hash===item.route?"page":undefined} onClick={()=>item.route&&goTo(item.route)}><StrokeIcon name={item.icon} size={18}/>{item.title}<span aria-hidden="true">{item.soon?"Coming soon":<StrokeIcon name="arrow" size={14}/>}</span></button>)}</nav><div className="app-drawer-foot"><img src="/logo/FieldAssistLogoColoured.svg" alt="FieldAssist"/>Internal tools</div></aside></>}
     </div>
-    {title && <header className="neosis-page-head"><div><h1>{title}</h1>{subtitle && <p>{subtitle}</p>}</div>{actions && <div className="page-actions">{actions}</div>}</header>}
+    {title && <header className="neosis-page-head" data-page={title}><div className="neosis-page-title">{backLink}<h1>{title}</h1>{subtitle && <p>{subtitle}</p>}</div>{actions && <div className="page-actions">{actions}</div>}</header>}
     <main className="neosis-content page-enter">{children}</main>
   </div>;
 }
@@ -1431,7 +1418,7 @@ function ImageExtractionPage({ onToggleTheme, onBack }) {
       {loadingColumns && <p style={{ color:T.textSub, marginBottom:20 }}>Reading spreadsheet headers…</p>}
       {columns.length > 0 && <div style={{ marginBottom:24 }}>
         <label style={lbl(T)} htmlFor="extract-column">2. Select the column that contains image links</label>
-        <window.NeosisToolkit.Select ariaLabel="Choose the spreadsheet column containing image links" value={columnIndex} onChange={value=>{setColumnIndex(value);setResult(null);setError("");}} placeholder="Choose a column\u2026" options={columns.map(col=>({value:String(col.index),label:col.name}))} style={{width:"100%"}} />
+        <window.NeosisToolkit.Select ariaLabel="Choose the spreadsheet column containing image links" value={columnIndex} onChange={value=>{setColumnIndex(value);setResult(null);setError("");}} placeholder="Choose a column…" options={columns.map(col=>({value:String(col.index),label:col.name}))} style={{width:"100%"}} />
       </div>}
       {error && <div role="alert" className="upload-error-banner" style={{ marginBottom:18 }}><strong>Could not complete extraction</strong><span>{error}</span></div>}
       {running && <div style={{ marginBottom:20 }}>
@@ -1451,8 +1438,19 @@ function ImageExtractionPage({ onToggleTheme, onBack }) {
 }
 
 function App() {
-  const routePage = () => ({ "#/labeler":1, "#/extract":5, "#/testing-images":6, "#/packshots":7, "#/":8, "":8 }[window.location.hash] || 8);
-  const [page,       setPage]     = useState(routePage);
+  const routePage = (hash=window.location.hash) => {
+    if (hash === "#/labeler") return 1;
+    if (hash === "#/extract") return 5;
+    if (hash === "#/testing-images" || hash.startsWith("#/testing-images/")) return 6;
+    if (hash === "#/packshots" || hash.startsWith("#/packshots/")) return 7;
+    return 8;
+  };
+  const routeBrandSlug = (hash, route) => {
+    if (!hash.startsWith(route + "/")) return "";
+    try { return decodeURIComponent(hash.slice(route.length + 1)); } catch (_) { return ""; }
+  };
+  const [routeHash, setRouteHash] = useState(() => window.location.hash || "#/");
+  const [page,       setPage]     = useState(() => routePage(window.location.hash));
   const [browseInitialFilter, setBrowseInitialFilter] = useState("all");
   const [isDark,     setDark]     = useState(() => {
     let selected;
@@ -1477,7 +1475,11 @@ function App() {
   useEffect(() => { injectFonts(); }, []);
 
   useEffect(() => {
-    const handleHash = () => setPage(routePage());
+    const handleHash = () => {
+      const hash = window.location.hash || "#/";
+      setRouteHash(hash);
+      setPage(routePage(hash));
+    };
     window.addEventListener("hashchange", handleHash);
     return () => window.removeEventListener("hashchange", handleHash);
   }, []);
@@ -1485,14 +1487,18 @@ function App() {
   return (
     <PageCtx.Provider value={page}>
       <ThemeCtx.Provider value={theme}>
+        <>
+        <style>{buildCSS(theme)}</style>
+        <style id="neosis-design">{IR_DESIGN_CSS}</style>
         {page === 1 && <Page1 onNext={() => setPage(2)} onToggleTheme={() => setDark(d => !d)} setSessionArgs={(id, c, i, nms) => { setSessionId(id); setConf(c); setIou(i); setAgnosticNms(nms); }} />}
         {page === 2 && <Page2 onNext={() => setPage(3)} onBack={() => setPage(1)} onToggleTheme={() => setDark(d => !d)} sessionId={sessionId} conf={conf} iou={iou} agnosticNms={agnosticNms} />}
         {page === 3 && <Page3 onViewImages={(filter="all") => { setBrowseInitialFilter(filter); setPage(4); }} onRerun={() => setPage(1)} onToggleTheme={() => setDark(d => !d)} sessionId={sessionId} setAnalyticsData={setAdvData} />}
         {page === 4 && <Page4 onBack={() => setPage(3)} onToggleTheme={() => setDark(d => !d)} sessionId={sessionId} analyticsData={advData} initialQuickFilter={browseInitialFilter} />}
         {page === 5 && <ImageExtractionPage onBack={() => { window.location.hash = "#/labeler"; }} onToggleTheme={() => setDark(d => !d)} />}
-        {page === 6 && <window.NeosisToolkit.TestingImagesPage Shell={Shell} onToggleTheme={() => setDark(d => !d)} />}
-        {page === 7 && <window.NeosisToolkit.PackshotsPage Shell={Shell} onToggleTheme={() => setDark(d => !d)} />}
+        {page === 6 && <window.NeosisToolkit.TestingImagesPage Shell={Shell} onToggleTheme={() => setDark(d => !d)} selectedSlug={routeBrandSlug(routeHash,"#/testing-images")} />}
+        {page === 7 && <window.NeosisToolkit.PackshotsPage Shell={Shell} onToggleTheme={() => setDark(d => !d)} selectedSlug={routeBrandSlug(routeHash,"#/packshots")} />}
         {page === 8 && <window.NeosisToolkit.HomePage Shell={Shell} onToggleTheme={() => setDark(d => !d)} />}
+        </>
       </ThemeCtx.Provider>
     </PageCtx.Provider>
   );

@@ -17,8 +17,9 @@ from storage.brands import add_brand, get_brands
 
 router = APIRouter(prefix="/api/tools", tags=["Internal Tools"])
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-MAX_FILES_PER_BATCH = 20
+MAX_FILES_PER_BATCH = 16
 MAX_PARALLEL_OBJECT_WRITES = 6
+MAX_PARALLEL_LIST_CALLS = 8
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_BATCH_BYTES = 100 * 1024 * 1024
 MAX_SHEET_BYTES = 20 * 1024 * 1024
@@ -119,11 +120,22 @@ def _unique_key(storage, prefix, filename, reserved=None, existing=None):
 @router.get("/brands")
 def list_tool_brands(request: Request):
     storage = request.app.state.storage
+    brands = get_brands(storage)
+    keys_by_brand = {brand.get("slug", ""): {"testing": [], "packshots": []} for brand in brands}
+    jobs = {}
+    with ThreadPoolExecutor(max_workers=MAX_PARALLEL_LIST_CALLS) as pool:
+        for slug in keys_by_brand:
+            jobs[pool.submit(storage.list, f"testing/{slug}")] = (slug, "testing")
+            jobs[pool.submit(storage.list, f"packshots/{slug}")] = (slug, "packshots")
+        for future in as_completed(jobs):
+            slug, collection = jobs[future]
+            keys_by_brand[slug][collection] = future.result()
+
     result = []
-    for brand in get_brands(storage):
-        slug = brand.get("slug", "")
-        testing = storage.list(f"testing/{slug}")
-        packshot_files = [key for key in storage.list(f"packshots/{slug}") if key.rsplit("/", 1)[-1] != MANIFEST]
+    for brand in brands:
+        inventory = keys_by_brand[brand.get("slug", "")]
+        testing = inventory["testing"]
+        packshot_files = [key for key in inventory["packshots"] if key.rsplit("/", 1)[-1] != MANIFEST]
         assets = sorted({key.split("/")[2] for key in testing if len(key.split("/")) > 3})
         result.append({**brand, "testing_count": len(testing), "testing_assets": assets, "packshot_count": len(packshot_files)})
     return {"brands": result}

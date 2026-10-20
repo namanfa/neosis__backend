@@ -3,7 +3,7 @@ const TOOL_IMAGE_TYPES = new Set(["jpg", "jpeg", "png", "webp"]);
 const TOOL_BATCH_SIZE = 16;
 
 function ToolkitIcon({ name="label", size=22 }) {
-  const paths={label:<><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8m-8 4h5"/></>,extract:<><path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/></>,testing:<><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 15-5-5L5 20"/></>,packshots:<><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M3 8v10l9 5 9-5V8M12 13v10"/></>,dashboard:<><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7"/></>,accuracy:<><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5m-9 5 2 2 4-4"/></>,check:<path d="m5 12 4 4L19 6"/>,arrow:<path d="M5 12h14m-6-6 6 6-6 6"/>,folder:<><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></>,file:<><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></>,close:<path d="m6 6 12 12M18 6 6 18"/>};
+  const paths={label:<><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8m-8 4h5"/></>,extract:<><path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/></>,upload:<><path d="M12 16V4m-5 5 5-5 5 5"/><path d="M5 14v6h14v-6"/></>,testing:<><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 15-5-5L5 20"/></>,packshots:<><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M3 8v10l9 5 9-5V8M12 13v10"/></>,dashboard:<><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7"/></>,accuracy:<><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5m-9 5 2 2 4-4"/></>,check:<path d="m5 12 4 4L19 6"/>,arrow:<path d="M5 12h14m-6-6 6 6-6 6"/>,folder:<><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></>,box:<><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M3 8v9l9 5 9-5V8M12 13v9"/></>,chip:<><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 9h6v6H9zM9 2v4m6-4v4m-6 12v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4"/></>,download:<><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 20h14"/></>,file:<><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></>,close:<path d="m6 6 12 12M18 6 6 18"/>};
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]||paths.label}</svg>;
 }
 
@@ -55,13 +55,13 @@ function ToolNotice({ error, success }) {
   return null;
 }
 
-function ToolPageShell({ Shell, title, subtitle, children, onToggleTheme, onBack, actions }) {
-  return <Shell title={title} subtitle={subtitle} actions={actions || (onBack && <button className="clay-btn-secondary" onClick={onBack}>← Back to tools</button>)} onToggleTheme={onToggleTheme} showSteps={false}>{children}</Shell>;
+function ToolPageShell({ Shell, title, subtitle, children, onToggleTheme, onBack, backLink, actions }) {
+  return <Shell title={title} subtitle={subtitle} backLink={backLink || (onBack && <button className="neosis-back-link" onClick={onBack}>← Back to tools</button>)} actions={actions} onToggleTheme={onToggleTheme} showSteps={false}>{children}</Shell>;
 }
 
 const TOOL_CARDS = [
   { title:"Pseudo Labelling", description:"Run a model over a folder of images and review the predicted labels, class by class.", icon:"label", route:"#/labeler" },
-  { title:"Image Extraction", description:"Turn a column of image links in an Excel or CSV file into a ZIP of downloaded images.", icon:"extract", route:"#/extract" },
+  { title:"Image Extraction", description:"Turn a column of image links in an Excel or CSV file into a ZIP of downloaded images.", icon:"extract", route:"#/extract", utility:true },
   { title:"Testing Images", description:"Browse test images by brand, filter by asset, and add new images for the team.", icon:"testing", route:"#/testing-images" },
   { title:"Packshots", description:"Reference packshots for each brand, with annotation names, names and IDs.", icon:"packshots", route:"#/packshots" },
   { title:"Model Dashboard", description:"Track model versions and accuracy for every brand in one place.", icon:"dashboard", soon:true },
@@ -72,13 +72,14 @@ function HomePage({ Shell, onToggleTheme }) {
   const [query,setQuery]=React.useState("");
   React.useEffect(()=>{const update=event=>setQuery(event.detail||"");window.addEventListener("ir-search",update);return()=>window.removeEventListener("ir-search",update);},[]);
   const matches=card=>!query.trim()||`${card.title} ${card.description}`.toLowerCase().includes(query.trim().toLowerCase());
-  const core=TOOL_CARDS.filter(card=>!card.soon&&matches(card)), utilities=TOOL_CARDS.filter(card=>card.soon&&matches(card));
-  const firstName=(window.IR_USER?.name||"team").split(" ")[0];
-  return <ToolPageShell Shell={Shell} title="Dashboard" subtitle={`Welcome back, ${firstName}. Choose a workflow to get started.`} onToggleTheme={onToggleTheme}>
-    {core.length>0&&<section aria-labelledby="core-workflows-title"><h2 id="core-workflows-title" className="dashboard-section-title"><ToolkitIcon name="packshots" size={20}/>Core workflows</h2><div className="dashboard-core-grid">
-      {core.map(card=><button key={card.title} onClick={()=>{window.location.hash=card.route;}} className="clay-card clay-card-interactive dashboard-workflow" type="button"><span className="dashboard-icon" aria-hidden="true"><ToolkitIcon name={card.icon} size={20}/></span><span><strong>{card.title}</strong><small>{card.description}</small></span></button>)}
+  const core=TOOL_CARDS.filter(card=>!card.utility&&matches(card)), utilities=TOOL_CARDS.filter(card=>card.utility&&matches(card));
+  const firstName=(window.IR_USER?.name||"").trim().split(/\s+/)[0];
+  const welcomeCopy=`Welcome to Neosis${firstName?", "+firstName:""}. Choose a workflow to get started.`;
+  return <ToolPageShell Shell={Shell} title="Dashboard" subtitle={welcomeCopy} onToggleTheme={onToggleTheme}>
+    {core.length>0&&<section className="dashboard-section" aria-labelledby="core-workflows-title"><h2 id="core-workflows-title" className="dashboard-section-title"><ToolkitIcon name="box" size={20}/>Core workflows</h2><div className="dashboard-core-grid">
+      {core.map(card=><button key={card.title} onClick={()=>{window.location.hash=card.route;}} className="clay-card clay-card-interactive dashboard-workflow" type="button"><span className="dashboard-workflow-top"><span className="dashboard-icon" aria-hidden="true"><ToolkitIcon name={card.icon} size={20}/></span><strong>{card.title}</strong></span><small>{card.description}</small></button>)}
     </div></section>}
-    {utilities.length>0&&<section className="dashboard-utilities" aria-labelledby="utilities-title"><h2 id="utilities-title" className="dashboard-section-title"><ToolkitIcon name="dashboard" size={20}/>Utilities</h2><div className="clay-card dashboard-utility-panel"><div className="dashboard-utility-grid">{utilities.map(card=><button key={card.title} disabled className="dashboard-utility" type="button"><span className="dashboard-utility-icon" aria-hidden="true"><ToolkitIcon name={card.icon} size={18}/></span><span className="dashboard-utility-copy"><strong>{card.title}<em>Coming soon</em></strong><small>{card.description}</small></span></button>)}</div></div></section>}
+    {utilities.length>0&&<section className="dashboard-section dashboard-utilities" aria-labelledby="utilities-title"><h2 id="utilities-title" className="dashboard-section-title"><ToolkitIcon name="chip" size={20}/>Utilities</h2><div className="clay-card dashboard-utility-panel"><div className="dashboard-utility-grid">{utilities.map(card=><button key={card.title} disabled={card.soon} onClick={()=>card.route&&(window.location.hash=card.route)} className="dashboard-utility" type="button"><span className="dashboard-utility-icon" aria-hidden="true"><ToolkitIcon name={card.icon} size={18}/></span><span className="dashboard-utility-copy"><strong>{card.title}{card.soon&&<em>Coming soon</em>}</strong><small>{card.description}</small></span></button>)}</div></div></section>}
     {!core.length&&!utilities.length&&<div className="clay-card dashboard-empty"><h2>No tools match “{query}”</h2><p>Try another search term.</p></div>}
   </ToolPageShell>;
 }
@@ -208,7 +209,7 @@ function UploadDialog({ mode, brands, onClose, onComplete }) {
   </div>;
 }
 
-function TestingImagesPage({ Shell, onToggleTheme }) {
+function TestingImagesPage({ Shell, onToggleTheme, selectedSlug="" }) {
   const [brands, setBrands] = React.useState([]);
   const [brand, setBrand] = React.useState(null);
   const [images, setImages] = React.useState([]);
@@ -223,26 +224,27 @@ function TestingImagesPage({ Shell, onToggleTheme }) {
   async function loadBrands() { const data = await toolJson(`${TOOL_API}/brands`); setBrands(data.brands || []); }
   async function loadGallery(selected, currentAsset="all") { const data = await toolJson(`${TOOL_API}/testing/${encodeURIComponent(selected.slug)}/images?asset=${encodeURIComponent(currentAsset)}`); setImages(data.images || []); setAssets(data.assets || []); }
   React.useEffect(() => { loadBrands().catch(err=>setError(err.message)); }, []);
+  React.useEffect(() => { if (!selectedSlug) { setBrand(null); return; } if (brands.length) setBrand(brands.find(item=>item.slug===selectedSlug)||null); }, [selectedSlug,brands]);
   React.useEffect(() => { if (brand) loadGallery(brand, asset).catch(err=>setError(err.message)); }, [brand, asset]);
   async function uploadComplete(slug) { const data=await toolJson(`${TOOL_API}/brands`);setBrands(data.brands||[]);const selected=(data.brands||[]).find(item=>item.slug===slug);if(selected){if(brand)setBrand(selected);else setPendingBrand(selected);} }
-  function closeUpload() { setUploadOpen(false); if(pendingBrand){setBrand(pendingBrand);setAsset("all");setPendingBrand(null);} }
+  function closeUpload() { setUploadOpen(false); if(pendingBrand){setBrand(pendingBrand);setAsset("all");window.location.hash="#/testing-images/"+encodeURIComponent(pendingBrand.slug);setPendingBrand(null);} }
 
   if (!brand) return <ToolPageShell Shell={Shell} title="Testing Images" subtitle="Browse test images by brand and asset." onToggleTheme={onToggleTheme} actions={<button className="clay-btn-primary" onClick={()=>setUploadOpen(true)}><ToolkitIcon name="extract" size={16}/>Upload images</button>}>
-    <ToolNotice error={error} /><BrandPicker brands={brands} countKey="testing_count" onPick={selected=>setBrand(selected)} emptyText="No testing images yet. Upload a folder to create your first brand gallery." />
+    <ToolNotice error={error} /><BrandPicker brands={brands} countKey="testing_count" onPick={selected=>{setBrand(selected);window.location.hash="#/testing-images/"+encodeURIComponent(selected.slug);}} emptyText="No testing images yet. Upload a folder to create your first brand gallery." />
     {uploadOpen && <UploadDialog mode="testing" brands={brands} onClose={closeUpload} onComplete={uploadComplete} />}
   </ToolPageShell>;
 
-  return <ToolPageShell Shell={Shell} title={brand.name} subtitle="Testing images" onToggleTheme={onToggleTheme} actions={<><button className="clay-btn-secondary" onClick={()=>{setBrand(null);setAsset("all");}}>All brands</button><button className="clay-btn-primary" onClick={()=>setUploadOpen(true)}><ToolkitIcon name="extract" size={16}/>Upload images</button></>}>
+  return <ToolPageShell Shell={Shell} title={brand.name} subtitle="Testing images" onToggleTheme={onToggleTheme} backLink={<button className="neosis-back-link" onClick={()=>{setBrand(null);setAsset("all");window.location.hash="#/testing-images";}}>← All brands</button>} actions={<button className="clay-btn-primary" onClick={()=>setUploadOpen(true)}><ToolkitIcon name="upload" size={16}/>Upload</button>}>
     <div className="toolkit-toolbar"><div className="toolkit-toolbar-filters"><button className="clay-btn-secondary" onClick={()=>setFilterOpen(value=>!value)} aria-expanded={filterOpen}><ToolkitIcon name="testing" size={16}/>Filter by asset</button><button className="filter-chip" aria-pressed={asset==="all"} onClick={()=>setAsset("all")}>All</button>{assets.map(item=><button key={item} className="filter-chip" aria-pressed={asset===item} onClick={()=>setAsset(asset===item?"all":item)}>{item.replace(/-/g," ")}</button>)}</div><span className="toolkit-meta">{images.length} images</span></div>
     {filterOpen && <div className="clay-card toolkit-filter-popover"><b>Show asset</b>{assets.map(item=><button key={item} className="filter-chip" aria-pressed={asset===item} onClick={()=>{setAsset(item);setFilterOpen(false);}}>{item.replace(/-/g," ")}</button>)}</div>}
     <ToolNotice error={error} />
-    {images.length ? <div className="testing-image-grid">{images.map((image,index)=><article key={image.key} className="clay-card testing-image-card"><button className="testing-image-button" onClick={()=>setLightbox(image)} aria-label={"Open "+(image.asset==="general"?"testing image":image.asset)}><img src={resolveToolkitImageUrl(image.url)} loading={index<24?"eager":"lazy"} fetchPriority={index<4?"high":"auto"} decoding="async" alt={image.asset==="general"?"Testing image":image.asset} /></button><div className="testing-image-caption"><span>{image.asset==="general"?"General":image.asset.replace(/-/g," ")}</span><a href={resolveToolkitImageUrl(image.url)} download>Download</a></div></article>)}</div> : <div className="clay-card toolkit-empty">No images in this view yet.</div>}
+    {images.length ? <div className="testing-image-grid">{images.map((image,index)=><article key={image.key} className="clay-card testing-image-card"><button className="testing-image-button" onClick={()=>setLightbox(image)} aria-label={"Open "+(image.asset==="general"?"testing image":image.asset)}><img src={resolveToolkitImageUrl(image.url)} loading="lazy" fetchPriority={index<2?"high":"auto"} decoding="async" alt={image.asset==="general"?"Testing image":image.asset} /></button><div className="testing-image-caption"><span>{image.asset==="general"?"General":image.asset.replace(/-/g," ")}</span><a href={resolveToolkitImageUrl(image.url)} download>Download</a></div></article>)}</div> : <div className="clay-card toolkit-empty">No images in this view yet.</div>}
     {lightbox && <div className="toolkit-lightbox" onClick={()=>setLightbox(null)} role="dialog" aria-modal="true" aria-label="Expanded testing image"><img src={resolveToolkitImageUrl(lightbox.url)} alt="Expanded testing image" /></div>}
     {uploadOpen && <UploadDialog mode="testing" brands={brands} onClose={closeUpload} onComplete={uploadComplete} />}
   </ToolPageShell>;
 }
 
-function PackshotsPage({ Shell, onToggleTheme }) {
+function PackshotsPage({ Shell, onToggleTheme, selectedSlug="" }) {
   const [brands, setBrands] = React.useState([]);
   const [brand, setBrand] = React.useState(null);
   const [images, setImages] = React.useState([]);
@@ -256,23 +258,28 @@ function PackshotsPage({ Shell, onToggleTheme }) {
   async function loadBrands() { const data=await toolJson(`${TOOL_API}/brands`);setBrands(data.brands||[]); }
   async function loadImages(selectedBrand) { const data=await toolJson(`${TOOL_API}/packshots/${encodeURIComponent(selectedBrand.slug)}`);setImages(data.images||[]);setSelected([]); }
   React.useEffect(()=>{loadBrands().catch(err=>setError(err.message));},[]);
+  React.useEffect(()=>{if(!selectedSlug){setBrand(null);return;}if(brands.length)setBrand(brands.find(item=>item.slug===selectedSlug)||null);},[selectedSlug,brands]);
   React.useEffect(()=>{if(brand)loadImages(brand).catch(err=>setError(err.message));},[brand]);
   async function uploadComplete(slug) { const data=await toolJson(`${TOOL_API}/brands`);setBrands(data.brands||[]);const selectedBrand=(data.brands||[]).find(item=>item.slug===slug);if(selectedBrand){if(brand)setBrand(selectedBrand);else setPendingBrand(selectedBrand);} }
-  function closeUpload() { setUploadOpen(false); if(pendingBrand){setBrand(pendingBrand);setPendingBrand(null);} }
+  function closeUpload() { setUploadOpen(false); if(pendingBrand){setBrand(pendingBrand);window.location.hash="#/packshots/"+encodeURIComponent(pendingBrand.slug);setPendingBrand(null);} }
   function downloadZip(names=[]) { const query=names.length?`?selected=${encodeURIComponent(names.join(","))}`:"";window.location.href=`${TOOL_API}/packshots/${encodeURIComponent(brand.slug)}/download${query}`; }
   async function replaceSelected(file) { if(!file||selected.length!==1)return;setError("");try{const form=new FormData();form.append("image",file,file.name);await toolJson(`${TOOL_API}/packshots/${encodeURIComponent(brand.slug)}/${encodeURIComponent(selected[0])}/replace`,{method:"POST",body:form});await loadImages(brand);}catch(err){setError(err.message);} }
   const toggleSelection = name => setSelected(value=>value.includes(name)?value.filter(item=>item!==name):[...value,name]);
-  if(!brand)return <ToolPageShell Shell={Shell} title="Packshots" subtitle="Brand product references with SKU labels." onToggleTheme={onToggleTheme} actions={<button className="clay-btn-primary" onClick={()=>setUploadOpen(true)}><ToolkitIcon name="extract" size={16}/>Upload packshots</button>}><ToolNotice error={error}/><BrandPicker brands={brands} countKey="packshot_count" onPick={setBrand} emptyText="No packshots yet. Upload an image folder and its mapping sheet."/>{uploadOpen&&<UploadDialog mode="packshots" brands={brands} onClose={closeUpload} onComplete={uploadComplete}/>}</ToolPageShell>;
+  if(!brand)return <ToolPageShell Shell={Shell} title="Packshots" subtitle="Brand product references with SKU labels." onToggleTheme={onToggleTheme} actions={<button className="clay-btn-primary" onClick={()=>setUploadOpen(true)}><ToolkitIcon name="extract" size={16}/>Upload packshots</button>}><ToolNotice error={error}/><BrandPicker brands={brands} countKey="packshot_count" onPick={selected=>{setBrand(selected);window.location.hash="#/packshots/"+encodeURIComponent(selected.slug);}} emptyText="No packshots yet. Upload an image folder and its mapping sheet."/>{uploadOpen&&<UploadDialog mode="packshots" brands={brands} onClose={closeUpload} onComplete={uploadComplete}/>}</ToolPageShell>;
   const selectedImages=images.filter(image=>selected.includes(image.file));
   const imageUrl=image=>resolveToolkitImageUrl(image.url);
-  return <ToolPageShell Shell={Shell} title={brand.name} subtitle={`${images.length} packshots`} onToggleTheme={onToggleTheme} actions={<><button className="clay-btn-secondary" onClick={()=>setBrand(null)}>All brands</button><button className="clay-btn-primary" onClick={()=>setUploadOpen(true)}>Upload packshots</button></>}>
-    <div className="toolkit-toolbar"><div className="ir-seg" role="group" aria-label="Packshot label">{[["annotation_name","Annotation"],["name","Name"],["id","ID"]].map(([key,label])=><button key={key} aria-pressed={labelMode===key} onClick={()=>setLabelMode(key)}>{label}</button>)}</div>
-      {selected.length>0&&<><button className="clay-btn-secondary" onClick={()=>setSelected(images.map(image=>image.file))}>Select all</button><button className="clay-btn-secondary" onClick={()=>setSelected([])}>Deselect all</button>{selected.length===1?<><button className="clay-btn-secondary" onClick={()=>replaceRef.current?.click()}>Replace image</button><button className="clay-btn-primary" onClick={()=>{const item=selectedImages[0];if(item){const anchor=document.createElement("a");anchor.href=imageUrl(item);anchor.download=item.file;anchor.click();}}}>Download</button></>:<button className="clay-btn-primary" onClick={()=>downloadZip(selected)}>Download selected ({selected.length})</button>}<input ref={replaceRef} type="file" accept=".jpg,.jpeg,.png,.webp" style={{display:"none"}} onChange={e=>replaceSelected(e.target.files?.[0])}/></>}
-      {selected.length===0&&<button className="clay-btn-primary" onClick={()=>downloadZip([])}>Download all as ZIP</button>}
+  const displayLabel=image=>labelMode==="annotation_name"?(image.annotation_name||image.file.replace(/\.[^.]+$/,"")):(image[labelMode]||"—");
+  const sortedImages=images.slice().sort((a,b)=>(a.name||a.annotation_name||a.file).localeCompare(b.name||b.annotation_name||b.file,undefined,{numeric:true,sensitivity:"base"}));
+  const downloadSelected=()=>{if(selected.length===1){const item=selectedImages[0];if(item){const anchor=document.createElement("a");anchor.href=imageUrl(item);anchor.download=item.file;anchor.click();}}else if(selected.length>1)downloadZip(selected);};
+  return <ToolPageShell Shell={Shell} title={brand.name} subtitle={`${images.length} packshots`} onToggleTheme={onToggleTheme} backLink={<button className="neosis-back-link" onClick={()=>{setBrand(null);window.location.hash="#/packshots";}}>← All brands</button>} actions={<button className="clay-btn-primary" onClick={()=>setUploadOpen(true)}><ToolkitIcon name="upload" size={16}/>Upload</button>}>
+    <div className="toolkit-toolbar"><div className="ir-seg" role="group" aria-label="Packshot label">{[["annotation_name","Annotation"],["name","Name"],["id","ID"]].map(([key,label])=><button key={key} aria-pressed={labelMode===key} onClick={()=>setLabelMode(key)}>{label}</button>)}</div><span className="toolkit-toolbar-spacer"/>
+      {selected.length>0&&<span className="toolkit-meta">{selected.length} selected</span>}
+      <div className="toolkit-toolbar-actions">{selected.length>0&&<><button className="clay-btn-primary toolbar-sm" onClick={downloadSelected}><ToolkitIcon name="download" size={15}/>Download ({selected.length})</button>{selected.length===1&&<button className="clay-btn-secondary toolbar-sm" onClick={()=>replaceRef.current?.click()}>Replace image</button>}<button className="clay-btn-secondary toolbar-sm" onClick={()=>setSelected(images.map(image=>image.file))}>Select all</button><button className="clay-btn-secondary toolbar-sm" onClick={()=>setSelected([])}>Deselect all</button><input ref={replaceRef} type="file" accept=".jpg,.jpeg,.png,.webp" style={{display:"none"}} onChange={e=>replaceSelected(e.target.files?.[0])}/></>}
+      {selected.length===0&&<><button className="clay-btn-secondary toolbar-sm" onClick={()=>setSelected(images.map(image=>image.file))}>Select all</button><button className="clay-btn-primary toolbar-sm" onClick={()=>downloadZip([])}><ToolkitIcon name="download" size={15}/>Download all as ZIP</button></>}</div>
     </div>
     <ToolNotice error={error}/>
-    <div className="packshot-grid">{images.map((image,index)=><article key={image.file} className={"clay-card packshot-tile"+(selected.includes(image.file)?" selected":"")} onClick={event=>{if(event.target.type!=="checkbox")setLightbox(image);}}><input type="checkbox" aria-label={"Select "+image.file} checked={selected.includes(image.file)} onClick={e=>e.stopPropagation()} onChange={()=>toggleSelection(image.file)}/><button className="packshot-image-button" aria-label={"Preview "+(image.name||image.file)} onClick={e=>{e.stopPropagation();setLightbox(image);}}><img src={imageUrl(image)} loading={index<24?"eager":"lazy"} fetchPriority={index<4?"high":"auto"} decoding="async" alt={image.name||image.file}/></button><div className="packshot-label" title={image[labelMode]||"—"}>{image[labelMode]||"—"}</div></article>)}</div>
-    {lightbox&&<div className="toolkit-lightbox" onClick={()=>setLightbox(null)} role="dialog" aria-modal="true" aria-label="Packshot preview"><div><img src={imageUrl(lightbox)} alt={lightbox.name||lightbox.file}/><strong>{lightbox[labelMode]||"—"}</strong></div></div>}
+    <div className="packshot-grid">{sortedImages.map((image,index)=><article key={image.file} className={"clay-card packshot-tile"+(selected.includes(image.file)?" selected":"")} onClick={event=>{if(event.target.type!=="checkbox")setLightbox(image);}}><input type="checkbox" aria-label={"Select "+image.file} checked={selected.includes(image.file)} onClick={e=>e.stopPropagation()} onChange={()=>toggleSelection(image.file)}/><button className="packshot-image-button" aria-label={"Preview "+(image.name||image.file)} onClick={e=>{e.stopPropagation();setLightbox(image);}}><img src={imageUrl(image)} loading="lazy" fetchPriority={index<2?"high":"auto"} decoding="async" alt={image.name||image.file}/></button><div className="packshot-label" title={displayLabel(image)}>{displayLabel(image)}</div></article>)}</div>
+    {lightbox&&<div className="toolkit-lightbox" onClick={()=>setLightbox(null)} role="dialog" aria-modal="true" aria-label="Packshot preview"><div><img src={imageUrl(lightbox)} alt={lightbox.name||lightbox.file}/><strong>{displayLabel(lightbox)}</strong></div></div>}
     {uploadOpen&&<UploadDialog mode="packshots" brands={brands} onClose={closeUpload} onComplete={uploadComplete}/>}
   </ToolPageShell>;
 }

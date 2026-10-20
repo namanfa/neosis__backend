@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IR Data Tool</title>
-    <meta name="description" content="Internal image recognition workflows for labeling, extraction, testing images and packshots.">
+    <title>Neosis</title>
+    <meta name="application-name" content="Neosis">
+    <meta name="description" content="Neosis image labeling, testing, packshot, and extraction workflows.">
 
     <link rel="icon" type="image/svg+xml" href="/logo/neosis-mark.svg">
     <script>
@@ -14,12 +15,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-    <!-- React 18 -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Pin the browser runtime so cached or upstream releases cannot change app behavior unexpectedly. -->
+    <script>window.NEOSIS_BRAND_NAME = "Neosis";</script>
+    <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
 
     <!-- Babel for JSX transpilation in the browser -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.7/babel.min.js"></script>
 
     <!-- Deployment & Backend Configuration -->
     <script>
@@ -46,6 +48,7 @@
             background: var(--bg);
             color: var(--text);
             font: 14px 'Plus Jakarta Sans', system-ui, sans-serif;
+            font-variant-numeric: tabular-nums;
         }
         #app-loader {
             display: flex;
@@ -74,7 +77,7 @@
     <div id="root">
         <div id="app-loader">
             <div class="spinner"></div>
-            <div style="font-weight: 600; font-size: 15px;">Loading Neosis SKU Labeler...</div>
+            <div style="font-weight: 600; font-size: 15px;">Loading Neosis...</div>
         </div>
     </div>
 
@@ -101,15 +104,16 @@
                         return response;
                     });
                 };
-                const toolkitResponse = await fetch("ToolkitPages.jsx");
+                const [toolkitResponse, response] = await Promise.all([
+                    fetch("/ToolkitPages.jsx"),
+                    fetch("/SKULabeler.jsx")
+                ]);
                 if (!toolkitResponse.ok) throw new Error("Failed to load toolkit pages: " + toolkitResponse.status + " " + toolkitResponse.statusText);
-                const toolkitSource = await toolkitResponse.text();
+                if (!response.ok) throw new Error("Failed to load application source: " + response.status + " " + response.statusText);
+                const [toolkitSource, jsxSource] = await Promise.all([toolkitResponse.text(), response.text()]);
                 const toolkitCompiled = Babel.transform(toolkitSource, { presets: [['react', { runtime: 'classic' }]] }).code;
                 new Function(toolkitCompiled)();
 
-                const response = await fetch("SKULabeler.jsx");
-                if (!response.ok) throw new Error("Failed to load application source: " + response.status + " " + response.statusText);
-                const jsxSource = await response.text();
                 const compiled = Babel.transform(jsxSource, { presets: [['react', { runtime: 'classic' }]] }).code;
                 new Function(compiled)();
             } catch (err) {

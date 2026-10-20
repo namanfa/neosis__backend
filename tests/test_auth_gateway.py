@@ -52,6 +52,9 @@ class AuthGatewayTests(unittest.TestCase):
         self.assertEqual(page.status_code, 302)
         self.assertIn("/login?", page.headers["location"])
         self.assertEqual(self.client.get("/SKULabeler.jsx", follow_redirects=False).status_code, 302)
+        for asset in ("/logo/neosis-mark.svg", "/logo/fa-icon-blue.png", "/logo/fa-wordmark-blue.png"):
+            with self.subTest(asset=asset):
+                self.assertNotEqual(self.client.get(asset, follow_redirects=False).status_code, 302)
         self.assertEqual(self.client.get("/api/private").status_code, 401)
         self.assertEqual(self.client.get("/auth/me").status_code, 401)
 
