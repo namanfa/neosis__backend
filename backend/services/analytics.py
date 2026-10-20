@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 import os
 import json
 import colorsys
@@ -24,8 +24,8 @@ def generate_distinct_colors(n):
     return colors
 
 @router.get("/{session_id}/analytics")
-async def get_analytics(session_id: str):
-    if not validate_session(session_id):
+async def get_analytics(session_id: str, request: Request):
+    if not validate_session(session_id, request.state.user["email"]):
         raise HTTPException(status_code=404, detail="Session not found")
         
     session_dir = get_session_dir(session_id)

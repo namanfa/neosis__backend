@@ -1,4 +1,5 @@
 import os
+import logging
 import threading
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -10,6 +11,21 @@ from fastapi.staticfiles import StaticFiles
 # its environment directly, so these file values never override deployment vars.
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 load_dotenv(os.path.join(project_root, "deploy", ".env"), override=False)
+
+
+class OAuthAccessLogFilter(logging.Filter):
+    """Keep callback codes and state out of the standard Uvicorn access log."""
+    def filter(self, record):
+        if record.name == "uvicorn.access" and isinstance(record.args, tuple) and len(record.args) >= 3:
+            values = list(record.args)
+            request_target = str(values[2])
+            if request_target.startswith("/auth/callback?"):
+                values[2] = "/auth/callback"
+                record.args = tuple(values)
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(OAuthAccessLogFilter())
 
 # Session directory configuration:
 # On Windows / local development, use the project's output/sessions directory.
@@ -23,7 +39,8 @@ if not os.environ.get("SESSION_BASE_DIR"):
 SESSION_BASE_DIR = os.environ["SESSION_BASE_DIR"]
 os.makedirs(SESSION_BASE_DIR, exist_ok=True)
 
-from services import upload_handler, inference_engine, analytics, preview, export, converter, image_extraction, library, toolkit_library
+from services import upload_handler, inference_engine, analytics, preview, export, converter, image_extraction, library, toolkit_library, auth
+from services import auth_store
 from storage import get_storage
 from storage.brands import get_brands
 
@@ -42,14 +59,16 @@ def _warm_inference_imports():
 
 @app.on_event("startup")
 async def start_inference_import_warmup():
+    auth_store.init_auth_store()
     threading.Thread(target=_warm_inference_imports, name="inference-import-warmup", daemon=True).start()
 
+app.add_middleware(auth.AuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[os.environ["APP_BASE_URL"].rstrip("/")] if os.environ.get("APP_BASE_URL") else [],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Requested-With"],
 )
 
 @app.get("/health", tags=["Health"])
@@ -66,12 +85,14 @@ app.include_router(converter.router, tags=["Convert"])
 app.include_router(image_extraction.router, tags=["Image Extraction"])
 app.include_router(library.router, tags=["Library Storage"])
 app.include_router(toolkit_library.router)
+app.include_router(auth.router)
 
 # Serve frontend for local operation if files are present
 frontend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 index_file = os.path.join(frontend_dir, "index.html")
 jsx_file = os.path.join(frontend_dir, "SKULabeler.jsx")
 toolkit_jsx_file = os.path.join(frontend_dir, "ToolkitPages.jsx")
+login_file = os.path.join(frontend_dir, "login.html")
 logo_dir = os.path.join(frontend_dir, "logo")
 
 if os.path.isdir(logo_dir):
@@ -87,6 +108,12 @@ if os.path.exists(index_file):
     @app.get("/index.html", include_in_schema=False)
     async def serve_index():
         return FileResponse(index_file)
+
+if os.path.exists(login_file):
+    @app.get("/login", include_in_schema=False)
+    @app.get("/login.html", include_in_schema=False)
+    async def serve_login():
+        return FileResponse(login_file)
 
 if os.path.exists(jsx_file):
     @app.get("/SKULabeler.jsx", include_in_schema=False)

@@ -1,7 +1,7 @@
 import os
 import asyncio
 import zipfile
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from .session_manager import get_session_dir, validate_session
 
@@ -57,8 +57,8 @@ def _build_zip(session_dir: str, zip_path: str):
 
 
 @router.get("/{session_id}/export")
-async def export_dataset(session_id: str):
-    if not validate_session(session_id):
+async def export_dataset(session_id: str, request: Request):
+    if not validate_session(session_id, request.state.user["email"]):
         raise HTTPException(status_code=404, detail="Session not found")
 
     session_dir = get_session_dir(session_id)

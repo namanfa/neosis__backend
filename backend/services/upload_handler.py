@@ -1,19 +1,21 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request
 import os
 import shutil
 from typing import List
 from .session_manager import create_session_id, get_session_dir, validate_session
+from . import auth_store
 
 router = APIRouter()
 
 @router.post("")
-async def create_new_session():
+async def create_new_session(request: Request):
     session_id = create_session_id()
+    auth_store.bind_tool_session(session_id, request.state.user["email"])
     return {"session_id": session_id}
 
 @router.post("/{session_id}/upload/images")
-async def handle_image_upload(session_id: str, files: List[UploadFile] = File(...)):
-    if not validate_session(session_id):
+async def handle_image_upload(session_id: str, request: Request, files: List[UploadFile] = File(...)):
+    if not validate_session(session_id, request.state.user["email"]):
         raise HTTPException(status_code=404, detail="Session not found")
     
     session_dir = get_session_dir(session_id)
@@ -32,8 +34,8 @@ async def handle_image_upload(session_id: str, files: List[UploadFile] = File(..
     return {"message": f"Successfully uploaded {len(saved_files)} images", "files": saved_files}
 
 @router.post("/{session_id}/upload/model")
-async def handle_model_upload(session_id: str, file: UploadFile = File(...)):
-    if not validate_session(session_id):
+async def handle_model_upload(session_id: str, request: Request, file: UploadFile = File(...)):
+    if not validate_session(session_id, request.state.user["email"]):
         raise HTTPException(status_code=404, detail="Session not found")
         
     if not file.filename.endswith('.pt'):
@@ -48,8 +50,8 @@ async def handle_model_upload(session_id: str, file: UploadFile = File(...)):
     return {"message": "Model uploaded successfully"}
 
 @router.post("/{session_id}/upload/darknet_labels")
-async def handle_darknet_labels_upload(session_id: str, file: UploadFile = File(...)):
-    if not validate_session(session_id):
+async def handle_darknet_labels_upload(session_id: str, request: Request, file: UploadFile = File(...)):
+    if not validate_session(session_id, request.state.user["email"]):
         raise HTTPException(status_code=404, detail="Session not found")
         
     session_dir = get_session_dir(session_id)

@@ -5,6 +5,17 @@ services:
       dockerfile: deploy/Dockerfile
     restart: unless-stopped
     environment:
+      AUTH_DB_PATH: ${AUTH_DB_PATH:-/data/auth.sqlite3}
+      APP_BASE_URL: ${APP_BASE_URL:-https://faneosis.duckdns.org}
+      OAUTH_REDIRECT_URI: ${OAUTH_REDIRECT_URI:-https://faneosis.duckdns.org/auth/callback}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-480}
+      SESSION_MAX_DAYS: ${SESSION_MAX_DAYS:-7}
+      ALLOWED_EMAIL_DOMAINS: ${ALLOWED_EMAIL_DOMAINS:-flick2know.com,flick2know.in,fieldassist.com,fieldassist.in}
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
       LIBRARY_DIR: ${LIBRARY_DIR:-/data/library}
       R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-}

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="IR Data Tool">
+  <rect width="48" height="48" rx="14" fill="#5545F5"/>
+  <path d="M14 11h7v26h-7zM24 11h5l12 15v11h-7L24 22z" fill="#fff"/>
+  <path d="M30 11h7v10l-7-8z" fill="#C9C3FF"/>
+</svg>

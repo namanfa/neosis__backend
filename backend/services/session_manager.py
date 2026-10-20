@@ -1,6 +1,7 @@
 import uuid
 import os
 import shutil
+from . import auth_store
 
 def get_base_dir():
     return os.environ.get(
@@ -21,6 +22,13 @@ def create_session_id():
 def get_session_dir(session_id: str):
     return os.path.join(get_base_dir(), session_id)
 
-def validate_session(session_id: str):
-    return os.path.exists(get_session_dir(session_id))
+def validate_session(session_id: str, owner_email: str = None):
+    try:
+        if str(uuid.UUID(session_id)) != session_id.lower():
+            return False
+    except (ValueError, TypeError, AttributeError):
+        return False
+    if not owner_email or not auth_store.owns_tool_session(session_id, owner_email):
+        return False
+    return os.path.isdir(get_session_dir(session_id))
 

@@ -15,9 +15,10 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urljoin, urlparse
 
 import httpx
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from starlette.background import BackgroundTask
+from . import auth_store
 
 router = APIRouter()
 MAX_SHEET_BYTES = 20 * 1024 * 1024
@@ -128,13 +129,14 @@ def _safe_sheet_stem(filename: str):
 
 
 @router.post("/api/extract/run")
-async def run_extraction(file: UploadFile = File(...), column_index: int = Form(...)):
+async def run_extraction(request: Request, file: UploadFile = File(...), column_index: int = Form(...)):
     content = await file.read(MAX_SHEET_BYTES + 1)
     rows, columns = _read_sheet(file.filename or "", content)
     if column_index < 0 or column_index >= len(columns):
         raise HTTPException(400, "Choose a valid column")
     os.makedirs(RESULTS_DIR, exist_ok=True)
     job_id = str(uuid.uuid4())
+    auth_store.bind_extraction_job(job_id, request.state.user["email"])
     job_dir = tempfile.mkdtemp(prefix=f"extract_{job_id}_", dir=RESULTS_DIR)
     zip_path = os.path.join(job_dir, f"{_safe_sheet_stem(file.filename or 'sheet')}_images.zip")
 
@@ -200,8 +202,10 @@ def _download_with_client(client, item, downloads_dir):
 
 
 @router.get("/api/extract/download/{job_id}")
-async def download_extraction(job_id: str):
+async def download_extraction(job_id: str, request: Request):
     if not re.fullmatch(r"[0-9a-f-]{36}", job_id):
+        raise HTTPException(404, "Download not found")
+    if not auth_store.owns_extraction_job(job_id, request.state.user["email"]):
         raise HTTPException(404, "Download not found")
     matches = [name for name in os.listdir(RESULTS_DIR) if name.startswith(f"extract_{job_id}_")]
     if not matches:
@@ -211,4 +215,9 @@ async def download_extraction(job_id: str):
     if not zips:
         raise HTTPException(404, "Download not ready")
     path = os.path.join(job_dir, zips[0])
-    return FileResponse(path, media_type="application/zip", filename=zips[0], background=BackgroundTask(shutil.rmtree, job_dir, True))
+    return FileResponse(path, media_type="application/zip", filename=zips[0], background=BackgroundTask(_cleanup_extraction, job_dir, job_id))
+
+
+def _cleanup_extraction(job_dir, job_id):
+    shutil.rmtree(job_dir, ignore_errors=True)
+    auth_store.delete_extraction_job(job_id)

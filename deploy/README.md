@@ -1,6 +1,6 @@
 # Deploy Noesis on AWS EC2
 
-This guide runs the FastAPI backend and React UI on one **Ubuntu 24.04 x86_64 EC2 server**. Docker runs the app on a private Compose network, and Caddy serves both UI and API from the same HTTPS origin with HTTP Basic Authentication.
+This guide runs the FastAPI backend and React UI on one **Ubuntu 24.04 x86_64 EC2 server**. Docker runs the app on a private Compose network, and Caddy serves both UI and API from the same HTTPS origin with HTTP Basic Authentication. Google OAuth setup is documented in [`../docs/AUTH_SETUP.md`](../docs/AUTH_SETUP.md).
 
 The app requires the user to upload a `.pt` model at runtime; there is no default bundled model to preserve in the image.
 
@@ -98,7 +98,11 @@ AUTH_HASH='$2a$14$REPLACE_WITH_THE_GENERATED_HASH'
 
 Keep the single quotes around the hash so Docker Compose does not interpolate its `$` characters. If authentication fails, double every `$` in the hash as `$$`. Use a strong password and keep `.env` private; it is excluded from Git and the Docker build context.
 
-## 6. Build and start the app
+## 6. Configure Google sign-in
+
+Follow [`../docs/AUTH_SETUP.md`](../docs/AUTH_SETUP.md) to create a Google OAuth Web client and set `APP_BASE_URL`, `OAUTH_REDIRECT_URI`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, and the approved email allowlist in `deploy/.env`. Keep the existing `AUTH_USER` and `AUTH_HASH`; Caddy Basic Auth remains enabled as an additional access gate. The example allowlist in `.env.example` should be replaced with domains your team has approved.
+
+## 7. Build and start the app
 
 From `~/neosis__backend/deploy`:
 
@@ -133,13 +137,13 @@ docker compose logs -f app
 
 This switches the shared Testing Images and Packshots library to R2. Existing files under `output/library` or `deploy/data/library` are not copied automatically; migrate them before switching if you need to keep them. Labeler session uploads and temporary Image Extraction jobs remain on the app's local session storage and are not moved to R2 by this setting.
 
-Open `https://faneosis.duckdns.org` in a browser and sign in with `AUTH_USER` and the password used to generate `AUTH_HASH`. The app's health endpoint is also protected by the same login:
+Open `https://faneosis.duckdns.org` in a browser. Caddy first asks for `AUTH_USER` and its password; after that, sign in with an approved Google account. The `/health` endpoint is public for health checks:
 
 ```bash
 curl -u team https://faneosis.duckdns.org/health
 ```
 
-## 7. Delete session folders older than two days
+## 8. Delete session folders older than two days
 
 Sessions are stored under `deploy/data/sessions`. Add a daily cleanup job for the `ubuntu` user:
 

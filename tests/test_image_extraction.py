@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.parse import urlparse
 
@@ -17,6 +18,7 @@ from openpyxl import Workbook
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend")))
 from services import image_extraction as extraction
+from services import auth_store
 
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"test-png-data"
@@ -78,6 +80,12 @@ class ExtractionFlowTests(unittest.IsolatedAsyncioTestCase):
     async def test_column_selection_stream_and_zip_names(self):
         with tempfile.TemporaryDirectory() as folder:
             original_results_dir = extraction.RESULTS_DIR
+            original_auth_db = os.environ.get("AUTH_DB_PATH")
+            original_session_secret = os.environ.get("SESSION_SECRET")
+            os.environ["AUTH_DB_PATH"] = os.path.join(folder, "auth.sqlite3")
+            os.environ["SESSION_SECRET"] = "test-session-pepper"
+            auth_store.init_auth_store()
+            owner = SimpleNamespace(state=SimpleNamespace(user={"email": "owner@example.org"}))
             extraction.RESULTS_DIR = folder
             real_client = httpx.Client
             transport = httpx.MockTransport(lambda request: httpx.Response(
@@ -97,7 +105,7 @@ class ExtractionFlowTests(unittest.IsolatedAsyncioTestCase):
                     columns_response = await extraction.get_columns(UploadFile(filename="products.csv", file=io.BytesIO(csv_bytes)))
                     self.assertEqual([column["name"] for column in columns_response["columns"]], ["SKU", "Photos"])
 
-                    response = await extraction.run_extraction(upload, column_index=1)
+                    response = await extraction.run_extraction(owner, upload, column_index=1)
                     payload = ""
                     async for chunk in response.body_iterator:
                         payload += chunk.decode() if isinstance(chunk, bytes) else chunk
@@ -108,13 +116,23 @@ class ExtractionFlowTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result["saved"], 2)
                 job_id = result["download_url"].rsplit("/", 1)[1]
 
-                download = await extraction.download_extraction(job_id)
+                with self.assertRaises(Exception):
+                    await extraction.download_extraction(job_id, SimpleNamespace(state=SimpleNamespace(user={"email": "other@example.org"})))
+                download = await extraction.download_extraction(job_id, owner)
                 with zipfile.ZipFile(download.path) as archive:
                     self.assertEqual(set(archive.namelist()), {"image_2_1.png", "image_2_2.png"})
                 await download.background()
                 self.assertFalse(os.path.exists(os.path.dirname(download.path)))
             finally:
                 extraction.RESULTS_DIR = original_results_dir
+                if original_auth_db is None:
+                    os.environ.pop("AUTH_DB_PATH", None)
+                else:
+                    os.environ["AUTH_DB_PATH"] = original_auth_db
+                if original_session_secret is None:
+                    os.environ.pop("SESSION_SECRET", None)
+                else:
+                    os.environ["SESSION_SECRET"] = original_session_secret
 
 
 if __name__ == "__main__":

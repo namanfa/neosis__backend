@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Sign in · IR Data Tool</title>
+  <link rel="icon" type="image/svg+xml" href="/logo/ir-tool-mark.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    (function(){var t=null;try{t=localStorage.getItem('neosis-theme')}catch(e){}if(!t)t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t})();
+  </script>
+  <style>
+    :root{color-scheme:light;--surface:#fff;--text:#0f172a;--text-2:#475569;--border:#e2e8f0;--primary:#5545f5;--danger:#c62828;--danger-soft:#fde9e9;--focus:0 0 0 3px rgba(85,69,245,.35)}
+    :root[data-theme=dark]{color-scheme:dark;--surface:#172033;--text:#f1f5f9;--text-2:#cbd5e1;--border:#27344f;--primary:#8f85ff;--danger:#ff8a8a;--danger-soft:#3a1818;--focus:0 0 0 3px rgba(143,133,255,.5)}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;padding:24px;display:grid;place-items:center;background:radial-gradient(850px 480px at 50% 0,rgba(85,69,245,.24),transparent 72%),#0b1020;color:var(--text);font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+    .theme{position:fixed;top:20px;right:20px;width:42px;height:42px;border:1px solid rgba(255,255,255,.22);border-radius:12px;background:rgba(255,255,255,.08);color:white;font-size:18px;cursor:pointer}.card{width:min(440px,100%);padding:40px 36px 26px;border:1px solid rgba(255,255,255,.1);border-radius:20px;background:var(--surface);text-align:center;box-shadow:0 26px 72px rgba(0,0,0,.38)}.mark{width:54px;height:54px}.title{margin:18px 0 0;font-size:26px;line-height:1.2;font-weight:800;letter-spacing:-.03em}.sub{margin:9px 0 24px;color:var(--text-2);font-size:14px;line-height:1.6}.google{width:100%;height:48px;display:flex;align-items:center;justify-content:center;gap:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);font:700 14px 'Plus Jakarta Sans',system-ui,sans-serif;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s}.google:hover{border-color:var(--primary);box-shadow:0 2px 10px rgba(85,69,245,.18)}.google:focus-visible,.theme:focus-visible,.retry:focus-visible{outline:none;box-shadow:var(--focus)}.google:disabled{opacity:.7;cursor:wait}.g{width:20px;height:20px}.note{margin:15px 0 0;color:var(--text-2);font-size:12.5px;line-height:1.6}.alert{margin:0 0 14px;padding:12px;border:1px solid var(--danger);border-radius:10px;background:var(--danger-soft);color:var(--danger);font-size:13px;text-align:left}.retry{display:inline-block;margin:10px auto 0;padding:5px 10px;border:0;background:transparent;color:var(--primary);font:700 13px 'Plus Jakarta Sans',system-ui,sans-serif;cursor:pointer}.foot{margin-top:26px;padding-top:18px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:8px;color:var(--text-2);font-size:12px}.foot img{width:18px;height:18px;object-fit:contain}.spin{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:480px){body{padding:16px}.card{padding:32px 22px 22px}.title{font-size:23px}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+  </style>
+</head>
+<body>
+  <button class="theme" id="theme" type="button" aria-label="Toggle theme" title="Toggle theme">☼</button>
+  <main class="card" aria-labelledby="title">
+    <img class="mark" src="/logo/ir-tool-mark.svg" alt="">
+    <h1 class="title" id="title">Welcome to IR Data Tool</h1>
+    <p class="sub">Sign in with your approved Google work account to continue.</p>
+    <div class="alert" id="alert" role="alert" aria-live="polite" hidden></div>
+    <button class="retry" id="retry" type="button" hidden>Try again</button>
+    <button class="google" id="google" type="button">
+      <svg class="g" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2v5.1h6.7c3.9-3.6 6-8.8 6-15z"/><path fill="#34A853" d="M24 44c5.6 0 10.3-1.9 13.7-5.1L31 33.8c-1.9 1.3-4.2 2-7 2-5.4 0-10-3.7-11.7-8.6H5.4v5.3A20 20 0 0 0 24 44z"/><path fill="#FBBC05" d="M12.3 27.2a12 12 0 0 1 0-7.5v-5.3H5.4a20 20 0 0 0 0 18z"/><path fill="#EA4335" d="M24 11.1c3.1 0 5.9 1.1 8.1 3.2l6.1-6.1C34.5 4.9 29.7 3 24 3A20 20 0 0 0 5.4 14.4l6.9 5.3c1.7-4.9 6.3-8.6 11.7-8.6z"/></svg>
+      <span id="button-label">Continue with Google</span>
+    </button>
+    <p class="note">Access is restricted to accounts approved by your organization.</p>
+    <footer class="foot"><span>Internal tool by</span><img src="/logo/FieldAssistLogoColoured.svg" alt="FieldAssist"></footer>
+  </main>
+  <script>
+    const qs=new URLSearchParams(location.search), alertBox=document.getElementById('alert'), retry=document.getElementById('retry');
+    const messages={access_denied:'This Google account is not approved to use this tool. Switch to an approved account and try again.',invalid_state:'The sign-in request expired or could not be verified. Please try again.',google_error:'Google could not complete sign-in. Please try again.',token_exchange:'Google sign-in could not be completed. Please try again.',verification_failed:'We could not verify the Google account. Please try again.',unverified_email:'Google did not confirm this account?s email address. Sign in with a verified account.',redirect_uri_mismatch:'Google sign-in is misconfigured on this server. The redirect URL must match the Google Cloud Console setting.',invalid_code:'The Google sign-in code expired or was already used. Please start again.',google_unreachable:'Google sign-in is temporarily unavailable. Please try again.',not_configured:'Google sign-in has not been configured on this server yet.',rate_limited:'Too many sign-in attempts. Wait a few minutes, then try again.'};
+    if(qs.has('expired')){alertBox.textContent='Your session has expired. Sign in again.';alertBox.hidden=false;retry.hidden=false}
+    else if(qs.has('signed_out')){alertBox.textContent='You have been signed out.';alertBox.hidden=false}
+    else if(qs.has('error')){alertBox.textContent=messages[qs.get('error')]||'Sign-in failed. Please try again.';alertBox.hidden=false;retry.hidden=false;if(qs.get('error')==='access_denied')retry.textContent='Try another account'}
+    function nextPath(){let n=qs.get('next')||'/#/';if(location.hash&&(!n||n==='/'))n='/'+location.hash;if(!n.startsWith('/')||n.startsWith('//')||n.includes('\\'))n='/#/';return n}
+    document.getElementById('google').addEventListener('click',function(){const button=this;button.disabled=true;document.getElementById('button-label').textContent='Redirecting to Google…';button.insertAdjacentHTML('beforeend','<span class="spin" aria-hidden="true"></span>');location.href='/auth/login?next='+encodeURIComponent(nextPath())});
+    retry.addEventListener('click',()=>document.getElementById('google').click());
+    document.getElementById('theme').addEventListener('click',function(){const root=document.documentElement,next=root.dataset.theme==='dark'?'light':'dark';root.dataset.theme=next;try{localStorage.setItem('neosis-theme',next)}catch(e){}this.textContent=next==='dark'?'☀':'☾'});
+    document.getElementById('theme').textContent=document.documentElement.dataset.theme==='dark'?'☀':'☾';
+  </script>
+</body>
+</html>

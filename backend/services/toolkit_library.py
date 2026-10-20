@@ -1,5 +1,6 @@
 """Local-first APIs for Testing Images and Packshots."""
 import csv
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
 import json
 import os
@@ -17,10 +18,25 @@ from storage.brands import add_brand, get_brands
 router = APIRouter(prefix="/api/tools", tags=["Internal Tools"])
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 MAX_FILES_PER_BATCH = 20
+MAX_PARALLEL_OBJECT_WRITES = 6
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_BATCH_BYTES = 100 * 1024 * 1024
 MAX_SHEET_BYTES = 20 * 1024 * 1024
 MANIFEST = "manifest.json"
+
+
+def _store_objects(storage, objects):
+    """Write independent objects concurrently; object storage writes are network-bound."""
+    failures = {}
+    with ThreadPoolExecutor(max_workers=MAX_PARALLEL_OBJECT_WRITES) as pool:
+        futures = {pool.submit(storage.put, key, data, content_type): (key, filename) for key, data, content_type, filename in objects}
+        for future in as_completed(futures):
+            key, filename = futures[future]
+            try:
+                future.result()
+            except Exception as exc:
+                failures[key] = {"file": filename, "reason": str(exc)}
+    return failures
 
 
 def _brand(storage, slug):
@@ -86,13 +102,17 @@ def _manifest(storage, key):
     return data
 
 
-def _unique_key(storage, prefix, filename):
+def _unique_key(storage, prefix, filename, reserved=None, existing=None):
+    reserved = reserved if reserved is not None else set()
     stem, ext = os.path.splitext(filename)
     candidate = filename
     suffix = 1
-    while storage.exists(f"{prefix}/{candidate}"):
+    key = f"{prefix}/{candidate}"
+    while key in reserved or (key in existing if existing is not None else storage.exists(key)):
         candidate = f"{stem}_{suffix}{ext}"
         suffix += 1
+        key = f"{prefix}/{candidate}"
+    reserved.add(key)
     return candidate
 
 
@@ -162,6 +182,9 @@ async def upload_testing_images(
 
     added = ignored = failed = total_bytes = 0
     failures = []
+    reserved = set()
+    existing = set(storage.list(f"testing/{brand_slug}"))
+    pending = []
     for upload, relative_path in zip(files, paths):
         try:
             safe_name = _filename(relative_path)
@@ -182,15 +205,20 @@ async def upload_testing_images(
             if total_bytes > MAX_BATCH_BYTES:
                 raise HTTPException(413, "Upload batch exceeds the 100 MB limit")
             prefix = f"testing/{brand_slug}" + (f"/{asset_slug}" if asset_slug else "")
-            name = _unique_key(storage, prefix, safe_name)
-            storage.put(f"{prefix}/{name}", data, f"image/{'jpeg' if name.endswith(('.jpg', '.jpeg')) else name.rsplit('.', 1)[-1]}")
-            added += 1
+            name = _unique_key(storage, prefix, safe_name, reserved, existing)
+            content_type = f"image/{'jpeg' if name.endswith(('.jpg', '.jpeg')) else name.rsplit('.', 1)[-1]}"
+            pending.append((f"{prefix}/{name}", data, content_type, upload.filename or name))
         except HTTPException as exc:
             failed += 1
             failures.append({"file": upload.filename or "unknown", "reason": exc.detail})
         except Exception as exc:
             failed += 1
             failures.append({"file": upload.filename or "unknown", "reason": str(exc)})
+    write_failures = _store_objects(storage, pending)
+    for failure in write_failures.values():
+        failed += 1
+        failures.append(failure)
+    added += len(pending) - len(write_failures)
     return {"added": added, "ignored": ignored, "failed": failed, "failures": failures}
 
 
@@ -296,6 +324,9 @@ async def upload_packshots(
     by_file = {row.get("file"): row for row in manifest if isinstance(row, dict) and isinstance(row.get("file"), str)}
     added = ignored = failed = total_bytes = 0
     failures = []
+    reserved = set()
+    existing = set(storage.list(prefix))
+    pending = []
     for upload, row in zip(files, rows):
         try:
             safe_name = _filename(upload.filename or "")
@@ -309,23 +340,30 @@ async def upload_packshots(
             total_bytes += len(data)
             if total_bytes > MAX_BATCH_BYTES:
                 raise HTTPException(413, "Upload batch exceeds the 100 MB limit")
-            collision = storage.exists(f"{prefix}/{safe_name}")
-            filename = _unique_key(storage, prefix, safe_name)
-            storage.put(f"{prefix}/{filename}", data)
+            collision = f"{prefix}/{safe_name}" in existing
+            filename = _unique_key(storage, prefix, safe_name, reserved, existing)
             if collision or not isinstance(row, dict):
                 base = os.path.splitext(filename)[0]
                 label = {"annotation_name": base, "name": base, "id": base}
             else:
                 label = row
                 label = {"annotation_name": str(label.get("annotation_name") or os.path.splitext(filename)[0]), "name": str(label.get("name") or ""), "id": str(label.get("id") or "")}
-            by_file[filename] = {"file": filename, **label}
-            added += 1
+            pending.append((f"{prefix}/{filename}", data, "image/" + ("jpeg" if filename.lower().endswith((".jpg", ".jpeg")) else filename.rsplit(".", 1)[-1]), filename, label))
         except HTTPException as exc:
             failed += 1
             failures.append({"file": upload.filename or "unknown", "reason": exc.detail})
         except Exception as exc:
             failed += 1
             failures.append({"file": upload.filename or "unknown", "reason": str(exc)})
+    write_failures = _store_objects(storage, [item[:4] for item in pending])
+    for key, data, content_type, filename, label in pending:
+        key = f"{prefix}/{filename}"
+        if key in write_failures:
+            failed += 1
+            failures.append(write_failures[key])
+        else:
+            by_file[filename] = {"file": filename, **label}
+            added += 1
     storage.put_json(manifest_key, list(by_file.values()))
     return {"added": added, "ignored": ignored, "failed": failed, "failures": failures}
 

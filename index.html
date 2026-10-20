@@ -3,9 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neosis — SKU Labeler</title>
-    <meta name="description" content="Neosis is a free, browser-based AI dataset labelling tool powered by YOLO. Upload your images and .pt model — the backend handles all inference.">
+    <title>IR Data Tool</title>
+    <meta name="description" content="Internal image recognition workflows for labeling, extraction, testing images and packshots.">
 
+    <link rel="icon" type="image/svg+xml" href="/logo/ir-tool-mark.svg">
+    <script>
+        (function(){var t=null;try{t=localStorage.getItem("neosis-theme")}catch(e){}if(!t)t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t})();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -34,6 +38,8 @@
 
 
     <style>
+        :root { --bg:#F8FAFC;--surface:#FFFFFF;--surface-2:#F8FAFC;--surface-3:#F1F5F9;--border:#E2E8F0;--border-strong:#CBD5E1;--text:#0F172A;--text-2:#475569;--text-3:#64748B;--primary:#5545F5;--primary-hover:#4338CA;--primary-soft:#EEEDFF;--on-primary:#FFFFFF;--success:#12805C;--success-soft:#E3F5EE;--warn:#B45309;--warn-soft:#FEF3E2;--warn-line:#F1D9A8;--danger:#C62828;--danger-soft:#FDE9E9;--shadow:0 1px 2px rgba(15,23,42,.05),0 4px 14px rgba(15,23,42,.04);--focus:0 0 0 3px rgba(85,69,245,.35); }
+        :root[data-theme="dark"] { --bg:#0F172A;--surface:#172033;--surface-2:#1B2640;--surface-3:#222F4D;--border:#27344F;--border-strong:#3A4A6C;--text:#F1F5F9;--text-2:#CBD5E1;--text-3:#94A3B8;--primary:#8F85FF;--primary-hover:#A8A0FF;--primary-soft:#27235F;--on-primary:#12104A;--success:#4CD6A0;--success-soft:#0F3329;--warn:#F5B454;--warn-soft:#3A2A10;--warn-line:#5A4318;--danger:#FF8A8A;--danger-soft:#3A1818;--shadow:none;--focus:0 0 0 3px rgba(143,133,255,.5); }
         body {
             margin: 0;
             padding: 0;
@@ -72,8 +78,28 @@
     </div>
 
     <script>
+        function currentNextPath() { return window.location.pathname + window.location.search + window.location.hash; }
         (async function() {
             try {
+                const authResponse = await fetch("/auth/me", { credentials: "same-origin" });
+                if (authResponse.status === 401) {
+                    window.location.replace("/login?next=" + encodeURIComponent(currentNextPath()));
+                    return;
+                }
+                if (!authResponse.ok) throw new Error("Could not check your sign-in status.");
+                window.IR_USER = await authResponse.json();
+                const nativeFetch = window.fetch.bind(window);
+                window.fetch = function(input, options) {
+                    const requestUrl = typeof input === "string" ? input : input.url;
+                    return nativeFetch(input, Object.assign({ credentials: "same-origin" }, options || {})).then(function(response) {
+                        let parsed;
+                        try { parsed = new URL(requestUrl, window.location.href); } catch (_) {}
+                        if (response.status === 401 && parsed && parsed.origin === window.location.origin && parsed.pathname.startsWith("/api/")) {
+                            window.location.assign("/login?expired=1&next=" + encodeURIComponent(currentNextPath()));
+                        }
+                        return response;
+                    });
+                };
                 const toolkitResponse = await fetch("ToolkitPages.jsx");
                 if (!toolkitResponse.ok) throw new Error("Failed to load toolkit pages: " + toolkitResponse.status + " " + toolkitResponse.statusText);
                 const toolkitSource = await toolkitResponse.text();

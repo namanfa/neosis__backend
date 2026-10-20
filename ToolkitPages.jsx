@@ -2,6 +2,11 @@ const TOOL_API = (window.NOESIS_API_URL || "http://localhost:7860/api/sessions")
 const TOOL_IMAGE_TYPES = new Set(["jpg", "jpeg", "png", "webp"]);
 const TOOL_BATCH_SIZE = 20;
 
+function ToolkitIcon({ name="label", size=22 }) {
+  const paths={label:<><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8m-8 4h5"/></>,extract:<><path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/></>,testing:<><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 15-5-5L5 20"/></>,packshots:<><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M3 8v10l9 5 9-5V8M12 13v10"/></>,dashboard:<><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7"/></>,accuracy:<><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5m-9 5 2 2 4-4"/></>};
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]||paths.label}</svg>;
+}
+
 function resolveToolkitImageUrl(url) {
   if (!url) return "";
   if (/^https?:\/\//i.test(url)) return url;
@@ -30,6 +35,19 @@ function normalizeImageName(value) {
   return String(value || "").replace(/\\/g, "/").split("/").pop().replace(/\.[^.]+$/, "").trim().toLowerCase();
 }
 
+function AppSelect({ value, onChange, options, placeholder="Choose an option", ariaLabel="Choose an option", style={} }) {
+  const [open,setOpen]=React.useState(false), [active,setActive]=React.useState(0), [position,setPosition]=React.useState(null);
+  const triggerRef=React.useRef(null), menuRef=React.useRef(null), optionRefs=React.useRef([]);
+  const selected=options.find(option=>String(option.value)===String(value));
+  const usable=options.filter(option=>!option.disabled);
+  function close(restore=false){setOpen(false);if(restore)triggerRef.current?.focus();}
+  function openMenu(){const r=triggerRef.current.getBoundingClientRect(),h=Math.min(280,window.innerHeight-24),menuH=Math.min(h,options.length*42+12),top=window.innerHeight-r.bottom>=menuH+8?r.bottom+6:Math.max(12,r.top-menuH-6);setPosition({left:Math.max(12,Math.min(r.left,window.innerWidth-r.width-12)),top,width:r.width,maxHeight:h});setActive(Math.max(0,usable.findIndex(o=>String(o.value)===String(value))));setOpen(true);}
+  React.useEffect(()=>{if(open)optionRefs.current[active]?.focus();},[open,active]);
+  React.useEffect(()=>{if(!open)return;const update=()=>{const r=triggerRef.current?.getBoundingClientRect();if(r)setPosition(p=>p?{...p,left:Math.max(12,Math.min(r.left,window.innerWidth-r.width-12)),top:r.bottom+6,width:r.width}:p);};const outside=e=>{if(!triggerRef.current?.contains(e.target)&&!menuRef.current?.contains(e.target))close();};window.addEventListener("resize",update);window.addEventListener("scroll",update,true);document.addEventListener("pointerdown",outside);return()=>{window.removeEventListener("resize",update);window.removeEventListener("scroll",update,true);document.removeEventListener("pointerdown",outside);};},[open]);
+  function keyDown(e,index=-1){if(e.key==="Escape"){e.preventDefault();e.stopPropagation();close(true);return;}if(e.key==="Tab"){close();return;}if(["ArrowDown","ArrowUp","Home","End"].includes(e.key)){e.preventDefault();if(!open)openMenu();else if(e.key==="Home")setActive(0);else if(e.key==="End")setActive(Math.max(0,usable.length-1));else setActive((index+(e.key==="ArrowDown"?1:usable.length-1))%usable.length);}if((e.key==="Enter"||e.key===" ")&&index>=0){e.preventDefault();const option=usable[index];if(option){onChange(option.value);close(true);}}}
+  return <><button ref={triggerRef} type="button" className="neosis-select-trigger" aria-label={ariaLabel} aria-haspopup="listbox" aria-expanded={open} onClick={()=>open?close():openMenu()} onKeyDown={e=>keyDown(e,-1)} style={style}><span>{selected?.label||placeholder}</span><span className={`neosis-select-chevron${open?" open":""}`} aria-hidden="true">⌄</span></button>{open&&position&&ReactDOM.createPortal(<div ref={menuRef} className="neosis-select-menu" role="listbox" aria-label={ariaLabel} style={{position:"fixed",left:position.left,top:position.top,width:position.width,maxHeight:position.maxHeight,overflowY:"auto",zIndex:10000}}>{options.map(option=>{const index=usable.indexOf(option);return <button key={String(option.value)} ref={node=>{if(index>=0)optionRefs.current[index]=node;}} type="button" role="option" aria-selected={String(option.value)===String(value)} disabled={option.disabled} className={`neosis-select-option${option.action?" action":""}`} onMouseEnter={()=>index>=0&&setActive(index)} onClick={()=>{if(!option.disabled){onChange(option.value);close(true);}}} onKeyDown={e=>keyDown(e,index)}>{option.label}</button>;})}</div>,document.body)}</>;
+}
+
 function ToolNotice({ error, success }) {
   if (error) return <div role="alert" style={{ margin:"16px 0", padding:14, borderRadius:10, background:"var(--danger-soft)", color:"var(--danger)" }}>{error}</div>;
   if (success) return <div role="status" style={{ margin:"16px 0", padding:14, borderRadius:10, background:"var(--success-soft)", color:"var(--success)" }}>{success}</div>;
@@ -50,17 +68,15 @@ const TOOL_CARDS = [
 ];
 
 function HomePage({ Shell, onToggleTheme }) {
-  return <ToolPageShell Shell={Shell} title="IR Data Tool" subtitle="Choose a task to get started." onToggleTheme={onToggleTheme}>
-    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))", gap:18, maxWidth:1180 }}>
-      {TOOL_CARDS.map(card => <button key={card.title} disabled={card.soon} onClick={() => { if (!card.soon) window.location.hash = card.route; }} className="clay-card clay-card-interactive" style={{ textAlign:"left", padding:22, minHeight:160, cursor:card.soon?"not-allowed":"pointer", opacity:card.soon ? 0.58 : 1, color:"var(--text)" }}>
-        <span style={{ display:"inline-grid", placeItems:"center", width:42, height:42, borderRadius:12, background:"var(--primary-soft)", color:"var(--primary)", fontSize:23 }}>{card.icon}</span>
-        <h2 style={{ marginTop:17, fontSize:17 }}>{card.title}</h2><p style={{ marginTop:7, color:"var(--text-2)", lineHeight:1.55 }}>{card.description}</p>
-      {card.soon && <span style={{ display:"inline-block", marginTop:12, padding:"4px 8px", borderRadius:99, background:"var(--surface-3)", color:"var(--text-3)", fontSize:11, fontWeight:700 }}>Coming soon</span>}
-      </button>)}
-    </div>
+  const core=TOOL_CARDS.filter(card=>!card.soon), utilities=TOOL_CARDS.filter(card=>card.soon);
+  const firstName=(window.IR_USER?.name||"team").split(" ")[0];
+  return <ToolPageShell Shell={Shell} title="Dashboard" subtitle={`Welcome back, ${firstName}. Choose a workflow to get started.`} onToggleTheme={onToggleTheme}>
+    <section aria-labelledby="core-workflows-title"><h2 id="core-workflows-title" className="dashboard-section-title">Core workflows</h2><div className="dashboard-core-grid">
+      {core.map(card=><button key={card.title} onClick={()=>{window.location.hash=card.route;}} className="clay-card clay-card-interactive dashboard-workflow" type="button"><span className="dashboard-icon" aria-hidden="true">{card.icon}</span><span><strong>{card.title}</strong><small>{card.description}</small></span><span className="dashboard-arrow" aria-hidden="true">?</span></button>)}
+    </div></section>
+    <section className="dashboard-utilities" aria-labelledby="utilities-title"><div><h2 id="utilities-title" className="dashboard-section-title">Utilities</h2><p>Additional workflows</p></div><div className="dashboard-utility-grid">{utilities.map(card=><button key={card.title} disabled className="dashboard-utility" type="button"><span aria-hidden="true">{card.icon}</span><strong>{card.title}</strong><small>{card.description}</small><em>Coming soon</em></button>)}</div></section>
   </ToolPageShell>;
 }
-
 function BrandPicker({ brands, countKey, onPick, emptyText }) {
   const available = brands.filter(brand => brand[countKey] > 0);
   if (!available.length) return <div className="clay-card" style={{ padding:26, color:"var(--text-2)" }}>{emptyText}</div>;
@@ -140,7 +156,7 @@ function UploadDialog({ mode, brands, onClose, onComplete }) {
         <label style={{ display:"flex", alignItems:"center", gap:7 }}><input type="radio" checked={!newBrand} onChange={() => setNewBrand(false)} /> Existing brand</label>
         <label style={{ display:"flex", alignItems:"center", gap:7 }}><input type="radio" checked={newBrand} onChange={() => setNewBrand(true)} /> Add new brand</label>
       </div>
-      {newBrand ? <input value={newBrandName} onChange={e=>setNewBrandName(e.target.value)} placeholder="Brand name" style={{ width:"100%", marginTop:12, padding:12, borderRadius:9, border:"1px solid var(--border-strong)", background:"var(--surface-2)", color:"var(--text)" }} /> : <select value={brandSlug} onChange={e=>setBrandSlug(e.target.value)} style={{ width:"100%", marginTop:12, padding:12, borderRadius:9, border:"1px solid var(--border-strong)", background:"var(--surface-2)", color:"var(--text)" }}><option value="">Choose a brand</option>{usableBrands.map(brand=><option key={brand.slug} value={brand.slug}>{brand.name}</option>)}</select>}
+      {newBrand ? <input value={newBrandName} onChange={e=>setNewBrandName(e.target.value)} placeholder="Brand name" style={{ width:"100%", marginTop:12, padding:12, borderRadius:9, border:"1px solid var(--border-strong)", background:"var(--surface-2)", color:"var(--text)" }} /> : <AppSelect ariaLabel="Choose a brand" value={brandSlug} onChange={setBrandSlug} placeholder="Choose a brand" options={usableBrands.map(brand=>({value:brand.slug,label:brand.name}))} style={{width:"100%",marginTop:12}} />}
       {newBrand && <p style={{ marginTop:6, color:"var(--text-3)", fontSize:12 }}>Brand names that match an existing brand after case and space normalization are rejected.</p>}
       <label style={{ display:"block", marginTop:20, marginBottom:8, fontWeight:700 }}>Image folder</label>
       <input ref={folderRef} type="file" webkitdirectory="" directory="" multiple onChange={e=>setFiles(e.target.files || [])} />
@@ -224,4 +240,4 @@ function PackshotsPage({ Shell, onToggleTheme }) {
   </ToolPageShell>;
 }
 
-window.NeosisToolkit = { HomePage, TestingImagesPage, PackshotsPage };
+window.NeosisToolkit = { HomePage, TestingImagesPage, PackshotsPage, Select:AppSelect, Icon:ToolkitIcon };

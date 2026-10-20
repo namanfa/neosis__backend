@@ -1,14 +1,14 @@
 import os
 import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from .session_manager import get_session_dir, validate_session
 
 router = APIRouter()
 
 @router.get("/{session_id}/images")
-async def get_images(session_id: str):
-    if not validate_session(session_id):
+async def get_images(session_id: str, request: Request):
+    if not validate_session(session_id, request.state.user["email"]):
         raise HTTPException(status_code=404, detail="Session not found")
         
     session_dir = get_session_dir(session_id)
@@ -23,9 +23,11 @@ async def get_images(session_id: str):
     return predictions
 
 @router.get("/{session_id}/preview/{image_name}")
-async def get_preview_image(session_id: str, image_name: str):
-    if not validate_session(session_id):
+async def get_preview_image(session_id: str, image_name: str, request: Request):
+    if not validate_session(session_id, request.state.user["email"]):
         raise HTTPException(status_code=404, detail="Session not found")
+    if os.path.basename(image_name) != image_name or image_name in {".", ".."}:
+        raise HTTPException(status_code=404, detail="Image not found")
         
     session_dir = get_session_dir(session_id)
     raw_images_dir = os.path.join(session_dir, "raw_images")
@@ -37,10 +39,12 @@ async def get_preview_image(session_id: str, image_name: str):
     return FileResponse(image_path)
 
 @router.get("/{session_id}/detected/{image_name}")
-async def get_detected_image(session_id: str, image_name: str):
+async def get_detected_image(session_id: str, image_name: str, request: Request):
     """Serve the annotated image (with bounding boxes drawn on it)."""
-    if not validate_session(session_id):
+    if not validate_session(session_id, request.state.user["email"]):
         raise HTTPException(status_code=404, detail="Session not found")
+    if os.path.basename(image_name) != image_name or image_name in {".", ".."}:
+        raise HTTPException(status_code=404, detail="Image not found")
         
     session_dir = get_session_dir(session_id)
     detected_images_dir = os.path.join(session_dir, "detected_images")

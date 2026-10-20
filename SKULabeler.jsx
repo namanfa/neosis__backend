@@ -332,6 +332,51 @@ const buildCSS = (T) => `
 const mono = { fontFamily: "'Plus Jakarta Sans', sans-serif" };
 const lbl = (T) => ({ fontSize: 13, textTransform: "none", letterSpacing: "normal", color: T.textSub, display: "block", marginBottom: 8, fontWeight: 600 });
 
+const APP_NAV_ITEMS = [
+  { title:"Dashboard", route:"#/" },
+  { title:"Pseudo Labelling", route:"#/labeler" },
+  { title:"Image Extraction", route:"#/extract" },
+  { title:"Testing Images", route:"#/testing-images" },
+  { title:"Packshots", route:"#/packshots" },
+  { title:"Model Dashboard", soon:true },
+  { title:"Accuracy Doc", soon:true },
+];
+
+function StrokeIcon({ name, size=18 }) {
+  const paths={menu:<path d="M4 6h16M4 12h16M4 18h16"/>,close:<path d="m6 6 12 12M18 6 6 18"/>,sun:<><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></>,moon:<path d="M20.9 13A8.9 8.9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/>,arrow:<path d="M5 12h14m-6-6 6 6-6 6"/>,label:<><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8m-8 4h5"/></>,extract:<><path d="M12 3v12m-5-5 5 5 5-5M5 21h14"/></>,testing:<><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 15-5-5L5 20"/></>,packshots:<><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="M3 8v10l9 5 9-5V8M12 13v10"/></>,dashboard:<><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-7"/></>,accuracy:<><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5m-9 5 2 2 4-4"/></>};
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]||paths.label}</svg>;
+}
+
+const IR_DESIGN_CSS = `
+  :root { --bg:#F8FAFC;--surface:#FFFFFF;--surface-2:#F8FAFC;--surface-3:#F1F5F9;--border:#E2E8F0;--border-strong:#CBD5E1;--text:#0F172A;--text-2:#475569;--text-3:#64748B;--primary:#5545F5;--primary-hover:#4338CA;--primary-soft:#EEEDFF;--on-primary:#FFFFFF;--success:#12805C;--success-soft:#E3F5EE;--warn:#B45309;--warn-soft:#FEF3E2;--warn-line:#F1D9A8;--danger:#C62828;--danger-soft:#FDE9E9;--shadow:0 1px 2px rgba(15,23,42,.05),0 4px 14px rgba(15,23,42,.04);--focus:0 0 0 3px rgba(85,69,245,.35); }
+  :root[data-theme="dark"] { --bg:#0F172A;--surface:#172033;--surface-2:#1B2640;--surface-3:#222F4D;--border:#27344F;--border-strong:#3A4A6C;--text:#F1F5F9;--text-2:#CBD5E1;--text-3:#94A3B8;--primary:#8F85FF;--primary-hover:#A8A0FF;--primary-soft:#27235F;--on-primary:#12104A;--success:#4CD6A0;--success-soft:#0F3329;--warn:#F5B454;--warn-soft:#3A2A10;--warn-line:#5A4318;--danger:#FF8A8A;--danger-soft:#3A1818;--shadow:none;--focus:0 0 0 3px rgba(143,133,255,.5); }
+  body { font-family:'Plus Jakarta Sans',system-ui,sans-serif!important;background:var(--bg)!important;color:var(--text)!important; }
+  .neosis-topbar { position:sticky;top:0;z-index:100;height:62px!important;padding:0 32px!important;display:grid!important;grid-template-columns:minmax(190px,1fr) minmax(220px,560px) minmax(190px,1fr)!important;gap:24px!important;background:var(--surface)!important;border-bottom:1px solid var(--border)!important;box-shadow:none!important; }
+  .app-nav-left,.app-nav-right,.app-brand-link { display:flex;align-items:center; }
+  .app-nav-left { gap:14px;min-width:0; }.app-nav-right { position:relative;justify-self:end;gap:10px; }
+  .app-brand-link { gap:10px;text-decoration:none;color:var(--text);font-weight:800;font-size:15px;white-space:nowrap; }
+  .app-brand-mark { width:30px;height:30px; }.app-hamburger,.app-icon-btn { width:38px;height:38px;border:1px solid transparent;border-radius:10px;display:grid;place-items:center;background:transparent;color:var(--text-2);cursor:pointer;font-size:18px;transition:background .15s,border .15s; }
+  .app-hamburger:hover,.app-icon-btn:hover { background:var(--surface-2);border-color:var(--border); }.app-icon-btn:focus-visible,.app-hamburger:focus-visible,.app-avatar:focus-visible,.app-search:focus-visible { outline:none;box-shadow:var(--focus); }
+  .app-search-wrap { position:relative;width:100%; }.app-search { width:100%;height:40px;padding:0 14px 0 38px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);font:500 13px 'Plus Jakarta Sans',sans-serif; }.app-search-icon { position:absolute;left:13px;top:10px;color:var(--text-3);pointer-events:none; }
+  .app-search-menu,.app-account-menu { position:absolute;top:calc(100% + 8px);right:0;z-index:500;width:min(420px,calc(100vw - 24px));padding:8px;border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:var(--shadow); }.app-search-menu { left:0;right:auto; }.app-menu-label { padding:8px 10px;color:var(--text-3);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em; }.app-menu-item { width:100%;min-height:42px;padding:9px 10px;display:flex;align-items:center;justify-content:space-between;gap:12px;border:0;border-radius:9px;background:transparent;color:var(--text);text-align:left;font:600 13px 'Plus Jakarta Sans',sans-serif;cursor:pointer; }.app-menu-item:hover,.app-menu-item[aria-current="page"] { background:var(--primary-soft);color:var(--primary); }.app-menu-item:disabled { opacity:.5;cursor:not-allowed; }
+  .app-avatar { width:36px;height:36px;overflow:hidden;border:0;border-radius:50%;display:grid;place-items:center;background:var(--primary-soft);color:var(--primary);font-size:12px;font-weight:800;cursor:pointer; }.app-avatar img { width:100%;height:100%;object-fit:cover; }.app-account-menu { width:260px; }.app-account-info { padding:10px 10px 12px;border-bottom:1px solid var(--border);margin-bottom:6px; }.app-account-info strong,.app-account-info span { display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }.app-account-info strong { font-size:13px; }.app-account-info span { margin-top:4px;color:var(--text-3);font-size:11px; }
+  .app-drawer-backdrop { position:fixed;inset:0;z-index:200;background:rgba(15,23,42,.38); }.app-drawer { position:fixed;inset:0 auto 0 0;z-index:201;width:min(310px,86vw);padding:18px;display:flex;flex-direction:column;background:var(--surface);box-shadow:8px 0 34px rgba(15,23,42,.14);animation:drawer-in .18s ease-out; }.app-drawer-head { padding:4px 4px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center; }.app-drawer-nav { display:grid;gap:4px;padding-top:14px; }.app-drawer-foot { margin-top:auto;padding:16px 6px 4px;border-top:1px solid var(--border);color:var(--text-3);font-size:11px; }.app-drawer-foot img { display:block;width:104px;max-height:25px;object-fit:contain;object-position:left;margin-bottom:10px; }
+  @keyframes drawer-in { from{transform:translateX(-12px);opacity:.75}to{transform:translateX(0);opacity:1} }
+  .workflow-progress { max-width:1360px;margin:18px auto 0;padding:0 40px; }.workflow-progress .neosis-steps { position:static;justify-content:center; }
+  .neosis-page-head { max-width:1360px;margin:0 auto;padding:28px 40px 10px!important; }.neosis-page-head h1 { font-size:30px!important;font-weight:800!important;letter-spacing:-.035em; }.neosis-content { max-width:1360px!important;margin:0 auto!important;padding:20px 40px 40px!important; }
+  .clay-card { border-radius:14px!important;border:1px solid var(--border)!important;background:var(--surface)!important;box-shadow:var(--shadow)!important;transition:transform .15s,border-color .15s,box-shadow .15s!important; }.clay-card-interactive:hover { transform:translateY(-2px)!important;border-color:var(--primary)!important;box-shadow:var(--shadow)!important; }
+  .clay-btn-primary { border:1px solid var(--primary)!important;border-radius:10px!important;background:var(--primary)!important;color:var(--on-primary)!important;box-shadow:none!important;transition:background .15s,border .15s,transform .15s!important; }.clay-btn-primary:hover { background:var(--primary-hover)!important;filter:none!important;transform:translateY(-1px)!important;box-shadow:none!important; }.clay-btn-secondary { border:1px solid var(--border-strong)!important;border-radius:10px!important;background:var(--surface)!important;color:var(--text)!important;box-shadow:none!important;transition:background .15s,border .15s!important; }.clay-btn-secondary:hover { border-color:var(--primary)!important;background:var(--primary-soft)!important;color:var(--primary)!important; }
+  .clay-btn-primary:focus-visible,.clay-btn-secondary:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible { outline:none;box-shadow:var(--focus)!important; }.clay-btn-primary:disabled,.clay-btn-secondary:disabled { opacity:.55;cursor:not-allowed;transform:none!important; }
+  input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea { border-radius:10px!important;color:var(--text)!important;background:var(--surface)!important; }.neosis-page-head p { color:var(--text-2)!important; }
+  @media(max-width:900px) { .neosis-topbar { grid-template-columns:minmax(140px,1fr) minmax(160px,420px) auto!important;gap:12px!important;padding:0 20px!important; }.workflow-progress,.neosis-page-head,.neosis-content { padding-left:24px!important;padding-right:24px!important; } }
+  @media(max-width:640px) { .neosis-topbar { grid-template-columns:1fr auto!important;grid-template-rows:56px 44px!important;height:108px!important;gap:0!important;padding:0 14px!important; }.app-search-wrap { display:block;grid-column:1/3;grid-row:2;align-self:center; }.app-search { height:36px; }.app-nav-left { gap:8px; }.app-brand-link { font-size:14px; }.app-nav-right { gap:4px; }.workflow-progress,.neosis-page-head,.neosis-content { padding-left:16px!important;padding-right:16px!important; }.workflow-progress { margin-top:10px; }.neosis-page-head { padding-top:22px!important; }.neosis-page-head h1 { font-size:24px!important; }.page-actions { justify-content:flex-start!important; } }
+  .dashboard-section-title { margin:0 0 14px;font-size:18px;font-weight:800;letter-spacing:-.02em;color:var(--text); }.dashboard-core-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px; }.dashboard-workflow { min-height:112px;padding:18px;display:grid;grid-template-columns:42px 1fr 18px;align-items:center;gap:14px;text-align:left;color:var(--text);cursor:pointer; }.dashboard-icon { width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:var(--primary-soft);color:var(--primary);font-size:21px; }.dashboard-workflow strong,.dashboard-workflow small { display:block; }.dashboard-workflow strong { font-size:14px;font-weight:800; }.dashboard-workflow small { margin-top:5px;color:var(--text-2);font-size:12px;line-height:1.45; }.dashboard-arrow { color:var(--text-3); }.dashboard-utilities { margin-top:30px;padding:20px;border:1px solid var(--border);border-radius:14px;background:var(--surface); }.dashboard-utilities>div:first-child p { margin:-8px 0 16px;color:var(--text-3);font-size:12px; }.dashboard-utility-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px; }.dashboard-utility { min-height:78px;padding:14px;display:grid;grid-template-columns:26px 1fr auto;align-items:center;gap:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);text-align:left; }.dashboard-utility>span { color:var(--text-3);font-size:18px; }.dashboard-utility strong { font-size:13px; }.dashboard-utility small { grid-column:2/4;color:var(--text-3);font-size:11px; }.dashboard-utility em { padding:4px 8px;border-radius:99px;background:var(--surface-3);color:var(--text-3);font-size:10px;font-style:normal;font-weight:700; }.dashboard-utility:disabled { opacity:.72;cursor:not-allowed; }
+  .neosis-select-trigger { min-height:42px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface);color:var(--text);font:500 13px 'Plus Jakarta Sans',sans-serif;text-align:left;cursor:pointer; }.neosis-select-trigger:focus-visible,.neosis-select-option:focus-visible { outline:none;box-shadow:var(--focus); }.neosis-select-chevron { color:var(--text-3);transition:transform .15s; }.neosis-select-chevron.open { transform:rotate(180deg); }.neosis-select-menu { padding:6px;border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:var(--shadow); }.neosis-select-option { width:100%;min-height:38px;padding:8px 10px;border:0;border-radius:8px;background:transparent;color:var(--text);font:500 13px 'Plus Jakarta Sans',sans-serif;text-align:left;cursor:pointer; }.neosis-select-option:hover,.neosis-select-option[aria-selected=true] { background:var(--primary-soft);color:var(--primary); }.neosis-select-option:disabled { opacity:.5;cursor:not-allowed; }
+  @media(max-width:1000px) { .dashboard-core-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media(max-width:720px) { .dashboard-core-grid,.dashboard-utility-grid { grid-template-columns:1fr; }.dashboard-workflow { min-height:96px; }.dashboard-utilities { padding:16px; } }
+  @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important; } }
+`;
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  SHELL — FIELDASSIST CLAY NAVBAR & HEADER
 // ─────────────────────────────────────────────────────────────────────────────
@@ -339,22 +384,50 @@ function Shell({ children, stepLabel, title, subtitle, actions, onToggleTheme, s
   const T = useT();
   const currentPage = useContext(PageCtx);
   const stepNames = ["Upload", "Inference", "Results", "Browse"];
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const navRef = useRef(null);
+  const user = window.IR_USER || {};
+  const visibleItems = APP_NAV_ITEMS.filter(item => item.title.toLowerCase().includes(searchText.trim().toLowerCase()));
+  const initials = (user.name || user.email || "U").split(/[\s@._-]+/).filter(Boolean).slice(0,2).map(part=>part[0].toUpperCase()).join("");
+  useEffect(() => {
+    const closeMenus = event => {
+      if (event.type === "keydown" && event.key === "Escape") { setDrawerOpen(false); setAccountOpen(false); setSearchOpen(false); }
+      if (event.type === "pointerdown" && navRef.current && !navRef.current.contains(event.target)) { setDrawerOpen(false); setAccountOpen(false); setSearchOpen(false); }
+    };
+    document.addEventListener("pointerdown", closeMenus);
+    document.addEventListener("keydown", closeMenus);
+    return () => { document.removeEventListener("pointerdown", closeMenus); document.removeEventListener("keydown", closeMenus); };
+  }, []);
+  const goTo = route => { window.location.hash = route; setDrawerOpen(false); setSearchOpen(false); setSearchText(""); };
+  async function signOut() {
+    try { await fetch("/auth/logout", { method:"POST", credentials:"same-origin" }); }
+    finally { window.location.assign("/login?signed_out=1"); }
+  }
   return <div className="neosis-shell" style={{ minHeight:"100vh", background:T.bg, color:T.text }}>
-    <style>{buildCSS(T)}</style>
-    <nav className="neosis-topbar">
-      <div className="neosis-brand">
-        <img className="brand-logo" src={T.mode === "dark" ? "/logo/FieldAssistLogo_White.svg" : "/logo/FieldAssistLogoColoured.svg"} alt="FieldAssist" />
-        <span className="brand-divider" />
-        <span className="brand-title"><b>NEOSIS</b><small>SKU Labeler</small></span>
-      </div>
-      {showSteps ? <ol className="neosis-steps" aria-label="Progress">{stepNames.map((name,i)=><li key={name} className={currentPage===i+1?"current":currentPage>i+1?"done":""} aria-current={currentPage===i+1?"step":undefined}><span>{currentPage>i+1?"✓":i+1}</span><b><span className="step-label">{name}</span><small className="step-mobile">Step {i+1} of 4 · {name}</small></b></li>)}</ol> : <div />}
-      <div style={{ justifySelf:"end", display:"flex", alignItems:"center", gap:8 }}>
-        <select aria-label="Navigate to tool" value={currentPage===1||currentPage===2||currentPage===3||currentPage===4?"#/labeler":currentPage===5?"#/extract":currentPage===6?"#/testing-images":currentPage===7?"#/packshots":"#/"} onChange={event=>{window.location.hash=event.target.value;}} style={{ maxWidth:170, padding:"9px 10px", borderRadius:10, border:"1px solid var(--border-strong)", color:"var(--text-2)", background:"var(--surface)", fontSize:12, fontWeight:700 }}>
-          <option value="#/">Home</option><option value="#/labeler">Pseudo Labelling</option><option value="#/extract">Image Extraction</option><option value="#/testing-images">Testing Images</option><option value="#/packshots">Packshots</option>
-        </select>
-        <button className="theme-toggle" onClick={onToggleTheme} aria-label="Switch between light and dark theme" title={T.mode === "dark" ? "Switch to light theme" : "Switch to dark theme"}>{T.mode === "dark" ? "☀" : "☾"}</button>
-      </div>
-    </nav>
+    <style>{buildCSS(T) + IR_DESIGN_CSS}</style>
+    <div className="app-nav-area" ref={navRef}>
+      <nav className="neosis-topbar" aria-label="Main navigation">
+        <div className="app-nav-left">
+          <button className="app-hamburger" type="button" aria-label="Open navigation menu" aria-expanded={drawerOpen} onClick={()=>setDrawerOpen(value=>!value)}><StrokeIcon name="menu"/></button>
+          <a href="#/" className="app-brand-link" aria-label="IR Data Tool dashboard"><img className="app-brand-mark" src="/logo/ir-tool-mark.svg" alt="" /><span>IR Data Tool</span></a>
+        </div>
+        <div className="app-search-wrap">
+          <span className="app-search-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg></span>
+          <input className="app-search" type="search" value={searchText} aria-label="Search tools and workflows" aria-expanded={searchOpen} placeholder="Search tools and workflows\u2026" onFocus={()=>setSearchOpen(true)} onChange={event=>{setSearchText(event.target.value);setSearchOpen(true);}} onKeyDown={event=>{if(event.key==="Enter"&&visibleItems.length)goTo(visibleItems[0].route);}} />
+          {searchOpen && <div className="app-search-menu" role="listbox" aria-label="Search results"><div className="app-menu-label">{searchText?"Matching workflows":"Tools and workflows"}</div>{visibleItems.length?visibleItems.map(item=><button className="app-menu-item" type="button" role="option" key={item.title} disabled={item.soon} onClick={()=>item.route&&goTo(item.route)}>{item.title}<span aria-hidden="true">{item.soon?"Coming soon":<StrokeIcon name="arrow" size={14}/>}</span></button>):<div className="app-menu-label">No matching workflows</div>}</div>}
+        </div>
+        <div className="app-nav-right">
+          <button className="app-icon-btn" type="button" onClick={onToggleTheme} aria-label={T.mode==="dark"?"Switch to light theme":"Switch to dark theme"} title={T.mode==="dark"?"Light theme":"Dark theme"}><StrokeIcon name={T.mode==="dark"?"sun":"moon"}/></button>
+          <button className="app-avatar" type="button" aria-label="Open account menu" aria-expanded={accountOpen} onClick={()=>setAccountOpen(value=>!value)}>{user.picture?<img src={user.picture} alt="" referrerPolicy="no-referrer"/>:initials}</button>
+          {accountOpen&&<div className="app-account-menu" role="menu"><div className="app-account-info"><strong>{user.name||"Signed in"}</strong><span>{user.email||""}</span></div><button className="app-menu-item" role="menuitem" type="button" onClick={signOut}>Sign out</button></div>}
+        </div>
+      </nav>
+      {showSteps&&<div className="workflow-progress"><ol className="neosis-steps" aria-label="Pseudo Labelling progress">{stepNames.map((name,i)=><li key={name} className={currentPage===i+1?"current":currentPage>i+1?"done":""} aria-current={currentPage===i+1?"step":undefined}><span>{currentPage>i+1?String.fromCharCode(10003):i+1}</span><b><span className="step-label">{name}</span><small className="step-mobile">Step {i+1} of 4 {"\u00b7"} {name}</small></b></li>)}</ol></div>}
+      {drawerOpen&&<><div className="app-drawer-backdrop" aria-hidden="true" onClick={()=>setDrawerOpen(false)}></div><aside className="app-drawer" aria-label="Tool navigation"><div className="app-drawer-head"><a href="#/" className="app-brand-link" onClick={()=>setDrawerOpen(false)}><img className="app-brand-mark" src="/logo/ir-tool-mark.svg" alt=""/><span>IR Data Tool</span></a><button type="button" className="app-icon-btn" aria-label="Close navigation menu" onClick={()=>setDrawerOpen(false)}><StrokeIcon name="close"/></button></div><nav className="app-drawer-nav">{APP_NAV_ITEMS.map(item=><button type="button" key={item.title} disabled={item.soon} className="app-menu-item" aria-current={window.location.hash===item.route?"page":undefined} onClick={()=>item.route&&goTo(item.route)}>{item.title}<span aria-hidden="true">{item.soon?"Coming soon":<StrokeIcon name="arrow" size={14}/>}</span></button>)}</nav><div className="app-drawer-foot"><img src={T.mode==="dark"?"/logo/FieldAssistLogo_White.svg":"/logo/FieldAssistLogoColoured.svg"} alt="FieldAssist"/>Internal tools</div></aside></>}
+    </div>
     {title && <header className="neosis-page-head"><div><h1>{title}</h1>{subtitle && <p>{subtitle}</p>}</div>{actions && <div className="page-actions">{actions}</div>}</header>}
     <main className="neosis-content page-enter">{children}</main>
   </div>;
@@ -1328,10 +1401,7 @@ function ImageExtractionPage({ onToggleTheme, onBack }) {
       {loadingColumns && <p style={{ color:T.textSub, marginBottom:20 }}>Reading spreadsheet headers…</p>}
       {columns.length > 0 && <div style={{ marginBottom:24 }}>
         <label style={lbl(T)} htmlFor="extract-column">2. Select the column that contains image links</label>
-        <select id="extract-column" value={columnIndex} onChange={e=>{setColumnIndex(e.target.value);setResult(null);setError("");}} style={{ width:"100%", padding:"12px 14px", borderRadius:10, border:`1px solid ${T.accentBorder}`, background:T.wellBg, color:T.text, fontSize:14 }}>
-          <option value="">Choose a column…</option>
-          {columns.map(col=><option key={col.index} value={col.index}>{col.name}</option>)}
-        </select>
+        <window.NeosisToolkit.Select ariaLabel="Choose the spreadsheet column containing image links" value={columnIndex} onChange={value=>{setColumnIndex(value);setResult(null);setError("");}} placeholder="Choose a column\u2026" options={columns.map(col=>({value:String(col.index),label:col.name}))} style={{width:"100%"}} />
       </div>}
       {error && <div role="alert" className="upload-error-banner" style={{ marginBottom:18 }}><strong>Could not complete extraction</strong><span>{error}</span></div>}
       {running && <div style={{ marginBottom:20 }}>

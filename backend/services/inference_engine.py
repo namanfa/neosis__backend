@@ -4,7 +4,7 @@ import json
 import asyncio
 import cv2
 from PIL import Image
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from .session_manager import get_session_dir, validate_session
 
@@ -222,8 +222,8 @@ async def run_inference_generator(session_id: str, conf: float, iou: float, agno
 
 
 @router.get("/{session_id}/infer")
-async def run_inference(session_id: str, conf: float = 0.25, iou: float = 0.45, agnostic_nms: bool = True, batch_size: int = 0):
-    if not validate_session(session_id):
+async def run_inference(session_id: str, request: Request, conf: float = 0.25, iou: float = 0.45, agnostic_nms: bool = True, batch_size: int = 0):
+    if not validate_session(session_id, request.state.user["email"]):
         raise HTTPException(status_code=404, detail="Session not found")
 
     return StreamingResponse(run_inference_generator(session_id, conf, iou, agnostic_nms, batch_size), media_type="text/event-stream")
