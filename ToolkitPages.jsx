@@ -77,7 +77,7 @@ function HomePage({ Shell, onToggleTheme }) {
   return <ToolPageShell Shell={Shell} title="Dashboard" subtitle={`Welcome back, ${firstName}. Choose a workflow to get started.`} onToggleTheme={onToggleTheme}>
     {core.length>0&&<section aria-labelledby="core-workflows-title"><h2 id="core-workflows-title" className="dashboard-section-title"><ToolkitIcon name="packshots" size={20}/>Core workflows</h2><div className="dashboard-core-grid">
       {core.map(card=><button key={card.title} onClick={()=>{window.location.hash=card.route;}} className="clay-card clay-card-interactive dashboard-workflow" type="button"><span className="dashboard-icon" aria-hidden="true"><ToolkitIcon name={card.icon} size={20}/></span><span><strong>{card.title}</strong><small>{card.description}</small></span></button>)}
-    </div></section>
+    </div></section>}
     {utilities.length>0&&<section className="dashboard-utilities" aria-labelledby="utilities-title"><h2 id="utilities-title" className="dashboard-section-title"><ToolkitIcon name="dashboard" size={20}/>Utilities</h2><div className="clay-card dashboard-utility-panel"><div className="dashboard-utility-grid">{utilities.map(card=><button key={card.title} disabled className="dashboard-utility" type="button"><span className="dashboard-utility-icon" aria-hidden="true"><ToolkitIcon name={card.icon} size={18}/></span><span className="dashboard-utility-copy"><strong>{card.title}<em>Coming soon</em></strong><small>{card.description}</small></span></button>)}</div></div></section>}
     {!core.length&&!utilities.length&&<div className="clay-card dashboard-empty"><h2>No tools match “{query}”</h2><p>Try another search term.</p></div>}
   </ToolPageShell>;
