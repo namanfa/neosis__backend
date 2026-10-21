@@ -5,18 +5,27 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from unittest import mock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
+from PIL import Image
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend")))
+from services import toolkit_library
 from services.toolkit_library import router
 from storage.brands import add_brand
 from storage.local import LocalBackend
 
 
 PNG = b"\x89PNG\r\n\x1a\n" + (b"fake-png-content" * 4)
+
+
+def make_png(size=(500, 400), color=(20, 80, 160)):
+    output = io.BytesIO()
+    Image.new("RGB", size, color).save(output, format="PNG")
+    return output.getvalue()
 
 
 class ToolkitLibraryApiTests(unittest.TestCase):
@@ -26,11 +35,16 @@ class ToolkitLibraryApiTests(unittest.TestCase):
         self.brand = add_brand(self.storage, "Acme Foods")
         app = FastAPI()
         app.state.storage = self.storage
+        @app.middleware("http")
+        async def attach_test_user(request, call_next):
+            request.state.user = {"email": "reviewer@example.com"}
+            return await call_next(request)
         app.include_router(router)
         self.client = TestClient(app)
 
     def tearDown(self):
         self.client.close()
+        toolkit_library._derivative_pool.submit(lambda: None).result(timeout=10)
         self.tempdir.cleanup()
 
     def test_testing_upload_filters_files_merges_assets_and_avoids_overwrite(self):
@@ -76,11 +90,13 @@ class ToolkitLibraryApiTests(unittest.TestCase):
         listing = self.client.get(f"/api/tools/packshots/{self.brand['slug']}").json()["images"]
         by_name = {image["file"]: image for image in listing}
         self.assertEqual(by_name["sku-a.png"]["annotation_name"], "Cola 330ml")
+        stored_keys = self.storage.list("packshots/" + self.brand["slug"])
+        self.assertIn("unmapped.jpg", by_name, f"gallery rows={list(by_name)} storage={stored_keys}")
         self.assertEqual(by_name["unmapped.jpg"]["name"], "unmapped")
 
         replaced = self.client.post(
             f"/api/tools/packshots/{self.brand['slug']}/sku-a.png/replace",
-            files={"image": ("new.png", PNG + b"replacement", "image/png")},
+            files={"image": ("new.png", make_png((400, 300)), "image/png")},
         )
         self.assertEqual(replaced.status_code, 200, replaced.text)
         after_replace = self.client.get(f"/api/tools/packshots/{self.brand['slug']}").json()["images"]
@@ -102,6 +118,131 @@ class ToolkitLibraryApiTests(unittest.TestCase):
         response = self.client.post("/api/tools/packshots/prepare", files={"mapping": ("map.xlsx", stream.getvalue())})
         self.assertEqual(response.status_code, 400)
         self.assertIn("Duplicate image names", response.json()["detail"])
+
+    def test_logo_upload_and_versioned_logo_response(self):
+        logo = make_png((300, 200))
+        saved = self.client.post(
+            f"/api/tools/brands/{self.brand['slug']}/logo",
+            files={"logo": ("brand.png", logo, "image/png")},
+        )
+        self.assertEqual(saved.status_code, 200, saved.text)
+        logo_url = saved.json()["logo_url"]
+        response = self.client.get(logo_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "image/png")
+        self.assertIn("immutable", response.headers["cache-control"])
+        with Image.open(io.BytesIO(response.content)) as image:
+            self.assertLessEqual(max(image.size), 128)
+        response.close()
+
+        brands = self.client.get("/api/tools/brands")
+        self.assertEqual(brands.status_code, 200)
+        self.assertEqual(brands.json()["brands"][0]["logo_url"], logo_url)
+        self.assertIn("Server-Timing", brands.headers)
+        self.assertEqual(self.client.get("/api/tools/brands", headers={"If-None-Match": brands.headers["etag"]}).status_code, 304)
+
+    def test_gallery_thumbnail_is_generated_and_cached(self):
+        image = make_png((2400, 800))
+        uploaded = self.client.post(
+            f"/api/tools/testing/{self.brand['slug']}/upload",
+            data={"relative_paths": '["shelf/photo.png"]'},
+            files=[("files", ("photo.png", image, "image/png"))],
+        )
+        self.assertEqual(uploaded.status_code, 200, uploaded.text)
+        entry = self.client.get(f"/api/tools/testing/{self.brand['slug']}/images").json()["images"][0]
+        self.assertEqual(entry["width"], 2400)
+        thumb = self.client.get(entry["thumb_url"])
+        self.assertEqual(thumb.status_code, 200, f"{entry['thumb_url']} -> {thumb.text}")
+        self.assertEqual(thumb.headers["content-type"], "image/webp")
+        self.assertIn("immutable", thumb.headers["cache-control"])
+        with Image.open(io.BytesIO(thumb.content)) as derivative:
+            self.assertLessEqual(max(derivative.size), 640)
+
+    def test_derivative_size_and_dimension_gate_keeps_original_urls(self):
+        cases = [
+            ("small-1m.png", (1200, 800), 1024 * 1024, "none"),
+            ("small-29m.png", (1200, 800), int(2.9 * 1024 * 1024), "none"),
+            ("large-31m.png", (1200, 800), int(3.1 * 1024 * 1024), "generated"),
+            ("wide-2m.png", (6000, 3000), 2 * 1024 * 1024, "generated"),
+        ]
+        files, paths, originals = [], [], {}
+        for filename, dimensions, size, _ in cases:
+            data = make_png(dimensions) + b"\x00" * max(0, size - len(make_png(dimensions)))
+            originals[filename] = data
+            files.append(("files", (filename, data, "image/png")))
+            paths.append(filename)
+        response = self.client.post(
+            f"/api/tools/testing/{self.brand['slug']}/upload",
+            data={"relative_paths": __import__("json").dumps(paths)},
+            files=files,
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        gallery = self.client.get(f"/api/tools/testing/{self.brand['slug']}/images").json()["images"]
+        by_file = {row["file"]: row for row in gallery}
+        self.assertEqual({name: by_file[name]["derivative"] for name, _, _, _ in cases}, {name: expected for name, _, _, expected in cases})
+        for filename, _, _, decision in cases:
+            if decision == "none":
+                self.assertEqual(by_file[filename]["thumb_url"], by_file[filename]["url"])
+                self.assertEqual(by_file[filename]["preview_url"], by_file[filename]["url"])
+            with self.storage.get(f"testing/{self.brand['slug']}/{filename}") as source:
+                self.assertEqual(source.read(), originals[filename])
+
+    def test_derivative_threshold_can_be_changed_by_environment(self):
+        with mock.patch.dict(os.environ, {"IMAGE_DERIVATIVE_MIN_BYTES": str(512 * 1024)}):
+            self.assertTrue(toolkit_library._derivative_gate(1024 * 1024, 1200, 800))
+        self.assertFalse(toolkit_library._derivative_gate(1024 * 1024, 1200, 800))
+
+    def test_non_smaller_webp_falls_back_to_original(self):
+        image = make_png((1200, 800)) + b"\x00" * (3 * 1024 * 1024)
+        key = f"testing/{self.brand['slug']}/large.png"
+        self.storage.put(key, image, "image/png")
+        toolkit_library._refresh_gallery(self.storage, "testing", self.brand["slug"])
+        with mock.patch.object(toolkit_library, "_make_webp", side_effect=[(b"x" * (len(image) + 1), 1200, 800), (b"y" * (len(image) + 1), 1200, 800)]):
+            result = toolkit_library._generate_derivatives(self.storage, "testing", self.brand["slug"], key, toolkit_library._version_for(next(row for row in self.storage.list_entries(f"testing/{self.brand['slug']}") if row["key"] == key)), image)
+        self.assertEqual(result["derivative"], "none")
+        self.assertEqual(result["card"], key)
+        self.assertEqual(result["preview"], key)
+
+    def test_packshot_labels_edit_persist_and_zip_uses_updated_annotation(self):
+        image = make_png((300, 200))
+        uploaded = self.client.post(
+            f"/api/tools/packshots/{self.brand['slug']}/upload",
+            data={"mapping_rows": '[{"annotation_name":"Original label","name":"Cola","id":"A1"},{"annotation_name":"Other","name":"Juice","id":"B2"}]'},
+            files=[("files", ("sku.png", image, "image/png")), ("files", ("other.png", image, "image/png"))],
+        )
+        self.assertEqual(uploaded.status_code, 200, uploaded.text)
+        before = next(row for row in self.client.get(f"/api/tools/packshots/{self.brand['slug']}").json()["images"] if row["file"] == "sku.png")
+        url = f"/api/tools/packshots/{self.brand['slug']}/sku.png/labels"
+        edited = self.client.patch(url, headers={"If-Match": before["label_etag"]}, json={"field": "annotation", "value": "  New   label  "})
+        self.assertEqual(edited.status_code, 200, edited.text)
+        self.assertEqual(edited.json()["annotation_name"], "New label")
+        self.assertEqual(edited.json()["updated_by"], "reviewer@example.com")
+        after = next(row for row in self.client.get(f"/api/tools/packshots/{self.brand['slug']}").json()["images"] if row["file"] == "sku.png")
+        self.assertEqual(after["annotation_name"], "New label")
+        conflict = self.client.patch(url, headers={"If-Match": before["label_etag"]}, json={"field": "id", "value": "B2"})
+        self.assertEqual(conflict.status_code, 409)
+        cleared = self.client.patch(url, headers={"If-Match": after["label_etag"]}, json={"field": "annotation", "value": ""})
+        self.assertEqual(cleared.status_code, 200)
+        self.assertEqual(cleared.json()["annotation_name"], "sku")
+        named = self.client.patch(url, headers={"If-Match": cleared.json()["label_etag"]}, json={"field": "name", "value": "<script>alert(1)</script>"})
+        self.assertEqual(named.status_code, 200)
+        self.assertEqual(named.json()["name"], "<script>alert(1)</script>")
+        identified = self.client.patch(url, headers={"If-Match": named.json()["label_etag"]}, json={"field": "id", "value": "B2"})
+        self.assertEqual(identified.status_code, 200)
+        self.assertEqual(identified.json()["id"], "B2")
+        empty_name = self.client.patch(url, headers={"If-Match": identified.json()["label_etag"]}, json={"field": "name", "value": ""})
+        self.assertEqual(empty_name.status_code, 200)
+        self.assertEqual(empty_name.json()["name"], "")
+        duplicate = self.client.patch(url, headers={"If-Match": empty_name.json()["label_etag"]}, json={"field": "annotation", "value": "Other"})
+        self.assertEqual(duplicate.status_code, 200)
+        self.assertTrue(duplicate.json()["duplicate_annotation_name"])
+        invalid = self.client.patch(url, headers={"If-Match": duplicate.json()["label_etag"]}, json={"field": "name", "value": "x" * 201})
+        self.assertEqual(invalid.status_code, 400)
+        saved_zip = self.client.get(f"/api/tools/packshots/{self.brand['slug']}/download")
+        with zipfile.ZipFile(io.BytesIO(saved_zip.content)) as archive:
+            self.assertEqual(set(archive.namelist()), {"Other.png", "Other_1.png"})
+        with self.storage.get(f"packshots/{self.brand['slug']}/sku.png") as source:
+            self.assertEqual(source.read(), image)
 
 
 if __name__ == "__main__":

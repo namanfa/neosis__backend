@@ -32,15 +32,18 @@ class FakeR2Client:
         body = kwargs["Body"]
         self.objects[kwargs["Key"]] = body if isinstance(body, bytes) else body.read()
 
-    def get_object(self, Bucket, Key):
-        return {"Body": io.BytesIO(self.objects[Key])}
+    def get_object(self, Bucket, Key, **kwargs):
+        body = self.objects[Key]
+        if "Range" in kwargs:
+            body = body[: int(kwargs["Range"].split("-")[-1]) + 1]
+        return {"Body": io.BytesIO(body)}
 
     def head_object(self, Bucket, Key):
         if Key not in self.objects:
             exc = RuntimeError("missing")
             exc.response = {"Error": {"Code": "NoSuchKey"}, "ResponseMetadata": {"HTTPStatusCode": 404}}
             raise exc
-        return {}
+        return {"ContentLength": len(self.objects[Key])}
 
     def get_paginator(self, name):
         assert name == "list_objects_v2"
@@ -80,7 +83,12 @@ class R2BackendTests(unittest.TestCase):
         self.assertEqual(self.storage.get_json("brands.json"), [{"slug": "acme"}])
         self.assertEqual(self.storage.url_for_display("testing/acme/a b.png", 900), "https://signed.example/image")
         self.assertEqual(self.client.last_presign[0], "get_object")
-        self.assertEqual(self.client.last_presign[1], {"Bucket": "library", "Key": "testing/acme/a b.png"})
+        self.assertEqual(self.client.last_presign[1], {"Bucket": "library", "Key": "testing/acme/a b.png", "ResponseCacheControl": "private, max-age=86400"})
+
+    def test_reads_only_image_header_range_and_object_size(self):
+        self.storage.put("testing/acme/image.png", b"0123456789")
+        self.assertEqual(self.storage.get_prefix("testing/acme/image.png", 4), b"0123")
+        self.assertEqual(self.storage.get_size("testing/acme/image.png"), 10)
 
     def test_list_scopes_prefix_and_supports_immediate_mode(self):
         self.client.paginator.pages = [{"Contents": [{"Key": "testing/acme/a.png"}, {"Key": "testing/acme/nested/b.png"}]}]

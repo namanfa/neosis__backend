@@ -45,8 +45,8 @@ class LocalBackend(StorageBackend):
             raise ValueError("Storage key escapes library directory")
         return target
 
-    def put(self, key: str, fileobj_or_bytes: FileInput, content_type: str = "application/octet-stream") -> None:
-        del content_type  # Local files are identified by their content, not a stored MIME database.
+    def put(self, key: str, fileobj_or_bytes: FileInput, content_type: str = "application/octet-stream", cache_control: str | None = None) -> None:
+        del content_type, cache_control  # Local files are identified by their content, not stored headers.
         target = self._path(key)
         target.parent.mkdir(parents=True, exist_ok=True)
         fd, temp_name = tempfile.mkstemp(prefix=".upload-", dir=str(target.parent))
@@ -81,6 +81,18 @@ class LocalBackend(StorageBackend):
             return [base.relative_to(self.root).as_posix()]
         iterator = base.rglob("*") if recursive else base.iterdir()
         return sorted(path.relative_to(self.root).as_posix() for path in iterator if path.is_file())
+
+    def list_entries(self, prefix: str = ""):
+        entries = []
+        for key in self.list(prefix):
+            stat = self._path(key).stat()
+            entries.append({
+                "key": key,
+                "size": stat.st_size,
+                "etag": f'"{stat.st_mtime_ns:x}-{stat.st_size:x}"',
+                "last_modified": stat.st_mtime,
+            })
+        return entries
 
     def open_for_zip(self, key: str):
         return self.get(key)

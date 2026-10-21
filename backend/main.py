@@ -68,7 +68,7 @@ app.add_middleware(
     allow_origins=[os.environ["APP_BASE_URL"].rstrip("/")] if os.environ.get("APP_BASE_URL") else [],
     allow_credentials=True,
     allow_methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Requested-With"],
+    allow_headers=["Content-Type", "X-Requested-With", "If-Match"],
 )
 
 @app.get("/health", tags=["Health"])

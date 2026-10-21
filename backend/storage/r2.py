@@ -1,6 +1,8 @@
 """Cloudflare R2 object storage through its S3-compatible API."""
 import json
 import os
+import threading
+import time
 from pathlib import PurePosixPath, PureWindowsPath
 from urllib.parse import quote, urlsplit
 
@@ -52,12 +54,35 @@ class R2Backend(StorageBackend):
                 config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
             )
         self.client = client
+        self._display_url_lock = threading.Lock()
+        self._display_urls = {}
 
-    def put(self, key: str, fileobj_or_bytes: FileInput, content_type: str = "application/octet-stream") -> None:
-        self.client.put_object(Bucket=self.bucket, Key=_clean_key(key), Body=fileobj_or_bytes, ContentType=content_type)
+    def put(self, key: str, fileobj_or_bytes: FileInput, content_type: str = "application/octet-stream", cache_control: str | None = None) -> None:
+        params = {"Bucket": self.bucket, "Key": _clean_key(key), "Body": fileobj_or_bytes, "ContentType": content_type}
+        if cache_control:
+            params["CacheControl"] = cache_control
+        self.client.put_object(**params)
 
     def get(self, key: str):
         return self.client.get_object(Bucket=self.bucket, Key=_clean_key(key))["Body"]
+
+    def get_prefix(self, key: str, max_bytes: int = 524288) -> bytes:
+        end = max(0, int(max_bytes) - 1)
+        response = self.client.get_object(Bucket=self.bucket, Key=_clean_key(key), Range=f"bytes=0-{end}")
+        with response["Body"] as source:
+            return source.read(max_bytes)
+
+    def get_size(self, key: str) -> int | None:
+        try:
+            response = self.client.head_object(Bucket=self.bucket, Key=_clean_key(key))
+        except Exception as exc:
+            response_data = getattr(exc, "response", {}) or {}
+            status = response_data.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            code = response_data.get("Error", {}).get("Code")
+            if status == 404 or code in {"404", "NoSuchKey", "NotFound"}:
+                return None
+            raise
+        return int(response["ContentLength"]) if response.get("ContentLength") is not None else None
 
     def exists(self, key: str) -> bool:
         try:
@@ -72,27 +97,47 @@ class R2Backend(StorageBackend):
             raise
 
     def list(self, prefix: str = "", recursive: bool = True):
+        return [entry["key"] for entry in self.list_entries(prefix, recursive=recursive)]
+
+    def list_entries(self, prefix: str = "", recursive: bool = True):
         clean_prefix = _clean_key(prefix, allow_empty=True)
         object_prefix = f"{clean_prefix}/" if clean_prefix else ""
         paginator = self.client.get_paginator("list_objects_v2")
         params = {"Bucket": self.bucket, "Prefix": object_prefix}
         if not recursive:
             params["Delimiter"] = "/"
-        keys = []
+        entries = []
         for page in paginator.paginate(**params):
-            keys.extend(item["Key"] for item in page.get("Contents", []))
-        return sorted(keys)
+            for item in page.get("Contents", []):
+                entries.append({
+                    "key": item["Key"],
+                    "size": int(item.get("Size", 0)),
+                    "etag": f'"{str(item.get("ETag", "")).strip(chr(34))}"' if item.get("ETag") else "",
+                    "last_modified": item.get("LastModified").timestamp() if item.get("LastModified") else None,
+                })
+        return sorted(entries, key=lambda item: item["key"])
 
     def open_for_zip(self, key: str):
         return self.get(key)
 
     def url_for_display(self, key: str, expires_s: int = 900) -> str:
         expires_s = max(1, min(int(expires_s), 604800))
-        return self.client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": self.bucket, "Key": _clean_key(key)},
-            ExpiresIn=expires_s,
-        )
+        clean_key = _clean_key(key)
+        cache_key = (clean_key, expires_s)
+        now = time.time()
+        with self._display_url_lock:
+            cached = self._display_urls.get(cache_key)
+            if cached and cached[0] > now:
+                return cached[1]
+            url = self.client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": self.bucket, "Key": clean_key, "ResponseCacheControl": "private, max-age=86400"},
+                ExpiresIn=expires_s,
+            )
+            self._display_urls[cache_key] = (now + max(1, expires_s - min(60, expires_s // 4)), url)
+            if len(self._display_urls) > 5000:
+                self._display_urls = {item: value for item, value in self._display_urls.items() if value[0] > now}
+            return url
 
     def get_json(self, key: str):
         with self.get(key) as source:
