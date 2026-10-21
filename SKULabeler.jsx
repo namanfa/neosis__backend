@@ -1472,7 +1472,7 @@ function App() {
   const [isDark,     setDark]     = useState(() => {
     let selected;
     try { const stored = localStorage.getItem("neosis-theme"); if (stored) selected = stored === "dark"; } catch (_) {}
-    if (selected === undefined) selected = window.matchMedia?.("(prefers-color-scheme: dark)").matches || false;
+    if (selected === undefined) selected = false;
     document.documentElement.dataset.theme = selected ? "dark" : "light";
     return selected;
   });
