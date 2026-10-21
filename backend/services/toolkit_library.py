@@ -18,7 +18,7 @@ from pathlib import PurePosixPath
 from urllib.parse import quote
 import xml.etree.ElementTree as ET
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, Body, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from PIL import Image, ImageCms, ImageOps, UnidentifiedImageError
 
@@ -282,6 +282,61 @@ def _refresh_gallery(storage, kind, slug, entries=None, dimensions=None, derivat
         storage.put_json(_gallery_index_key(kind, slug), data)
         _gallery_data_cache[(_storage_cache_key(storage), kind, slug)] = (time.monotonic() + 15, data)
         _refresh_brand_index(storage, slug)
+
+
+def _delete_gallery_images(storage, kind, slug, requested_keys=None):
+    """Delete images from one library only and refresh its gallery/brand indexes."""
+    if kind not in {"testing", "packshots"}:
+        raise HTTPException(404, "Image library not found")
+    prefix = f"{kind}/{slug}"
+    current_keys = {
+        key for key in storage.list(prefix)
+        if os.path.splitext(key)[1].lower() in IMAGE_EXTENSIONS
+    }
+    if requested_keys is None:
+        selected_keys = current_keys
+    else:
+        if not isinstance(requested_keys, list) or not requested_keys or not all(isinstance(key, str) for key in requested_keys):
+            raise HTTPException(400, "Select at least one image to delete")
+        selected_keys = set(requested_keys)
+        if any(not key.startswith(prefix + "/") or key not in current_keys for key in selected_keys):
+            raise HTTPException(404, "One or more selected images were not found in this library")
+
+    with _index_lock:
+        deleted_keys = set()
+        failed_keys = []
+        for key in selected_keys:
+            try:
+                storage.delete(key)
+                deleted_keys.add(key)
+            except Exception as exc:
+                failed_keys.append(key)
+                logger.warning("Could not delete %s library image %s: %s", kind, key, exc)
+
+        deleted_names = {key.rsplit("/", 1)[-1] for key in deleted_keys}
+        derivative_prefix = f"{THUMB_PREFIX}/{kind}/{slug}"
+        source_ids = {hashlib.sha256(key.encode("utf-8")).hexdigest()[:20] for key in deleted_keys}
+        clear_all_derivatives = requested_keys is None and not failed_keys
+        for derivative_key in storage.list(derivative_prefix):
+            if clear_all_derivatives or os.path.basename(derivative_key).split("-", 1)[0] in source_ids:
+                try:
+                    storage.delete(derivative_key)
+                except Exception as exc:
+                    logger.warning("Could not delete image derivative %s: %s", derivative_key, exc)
+
+        if kind == "packshots":
+            manifest_key = f"{prefix}/{MANIFEST}"
+            try:
+                labels = _manifest(storage, manifest_key)
+            except Exception:
+                labels = []
+            storage.put_json(manifest_key, [row for row in labels if not isinstance(row, dict) or row.get("file") not in deleted_names])
+
+        remaining_entries = storage.list_entries(prefix)
+        _refresh_gallery(storage, kind, slug, remaining_entries)
+    if failed_keys:
+        raise HTTPException(500, "Some images could not be deleted. The gallery was refreshed; retry the deletion.")
+    return len(deleted_keys)
 
 
 def _version_for(entry):
@@ -821,6 +876,22 @@ def list_testing_images(brand_slug: str, request: Request, asset: str = "all"):
     return _json_response(request, {"images": images, "assets": manifest["assets"]}, started, list_ms, 1 if rebuilt else 0, signing_ms)
 
 
+@router.delete("/testing/{brand_slug}/images")
+def delete_testing_images(brand_slug: str, request: Request, keys: list[str] = Body(...)):
+    storage = request.app.state.storage
+    _brand(storage, brand_slug)
+    deleted = _delete_gallery_images(storage, "testing", brand_slug, keys)
+    return {"deleted": deleted, "library": "testing", "brand_slug": brand_slug}
+
+
+@router.delete("/testing/{brand_slug}")
+def delete_all_testing_images(brand_slug: str, request: Request):
+    storage = request.app.state.storage
+    _brand(storage, brand_slug)
+    deleted = _delete_gallery_images(storage, "testing", brand_slug)
+    return {"deleted": deleted, "library": "testing", "brand_slug": brand_slug}
+
+
 @router.get("/thumb/{kind}/{brand_slug}/{relative_key:path}")
 async def get_tool_image_derivative(kind: str, brand_slug: str, relative_key: str, request: Request, v: str, size: str = "card"):
     started = time.perf_counter()
@@ -1011,6 +1082,22 @@ def list_packshots(brand_slug: str, request: Request):
         })
     signing_ms = (time.perf_counter() - signing_started) * 1000
     return _json_response(request, {"images": images}, started, list_ms, 1 if rebuilt else 0, signing_ms)
+
+
+@router.delete("/packshots/{brand_slug}/images")
+def delete_packshot_images(brand_slug: str, request: Request, keys: list[str] = Body(...)):
+    storage = request.app.state.storage
+    _brand(storage, brand_slug)
+    deleted = _delete_gallery_images(storage, "packshots", brand_slug, keys)
+    return {"deleted": deleted, "library": "packshots", "brand_slug": brand_slug}
+
+
+@router.delete("/packshots/{brand_slug}")
+def delete_all_packshots(brand_slug: str, request: Request):
+    storage = request.app.state.storage
+    _brand(storage, brand_slug)
+    deleted = _delete_gallery_images(storage, "packshots", brand_slug)
+    return {"deleted": deleted, "library": "packshots", "brand_slug": brand_slug}
 
 
 def _packshot_label_lock(storage, slug):

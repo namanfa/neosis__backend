@@ -70,6 +70,62 @@ class ToolkitLibraryApiTests(unittest.TestCase):
         filtered = self.client.get(f"/api/tools/testing/{self.brand['slug']}/images?asset=drinks").json()
         self.assertEqual(len(filtered["images"]), 2)
 
+    def test_testing_image_and_collection_deletion_leave_packshots_untouched(self):
+        slug = self.brand["slug"]
+        testing_key = f"testing/{slug}/random/photo.png"
+        packshot_key = f"packshots/{slug}/sku-a.png"
+        self.storage.put(testing_key, make_png(), "image/png")
+        self.storage.put(packshot_key, make_png(), "image/png")
+        self.storage.put_json(f"packshots/{slug}/manifest.json", [{"file": "sku-a.png", "annotation_name": "SKU A"}])
+        toolkit_library._refresh_gallery(self.storage, "testing", slug)
+        toolkit_library._refresh_gallery(self.storage, "packshots", slug)
+
+        rejected = self.client.request(
+            "DELETE",
+            f"/api/tools/testing/{slug}/images",
+            content=__import__("json").dumps([packshot_key]),
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(rejected.status_code, 404)
+        self.assertTrue(self.storage.exists(packshot_key))
+
+        deleted = self.client.request(
+            "DELETE",
+            f"/api/tools/testing/{slug}/images",
+            content=__import__("json").dumps([testing_key]),
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(deleted.status_code, 200, deleted.text)
+        self.assertFalse(self.storage.exists(testing_key))
+        self.assertTrue(self.storage.exists(packshot_key))
+        self.assertEqual(len(self.client.get(f"/api/tools/packshots/{slug}").json()["images"]), 1)
+
+        self.storage.put(testing_key, make_png(), "image/png")
+        toolkit_library._refresh_gallery(self.storage, "testing", slug)
+        cleared = self.client.delete(f"/api/tools/testing/{slug}")
+        self.assertEqual(cleared.status_code, 200, cleared.text)
+        self.assertEqual(cleared.json()["deleted"], 1)
+        self.assertFalse(self.storage.exists(testing_key))
+        self.assertTrue(self.storage.exists(packshot_key))
+        self.assertEqual(len(self.client.get(f"/api/tools/packshots/{slug}").json()["images"]), 1)
+
+    def test_packshot_collection_deletion_leaves_testing_images_untouched(self):
+        slug = self.brand["slug"]
+        testing_key = f"testing/{slug}/random/photo.png"
+        packshot_key = f"packshots/{slug}/sku-a.png"
+        self.storage.put(testing_key, make_png(), "image/png")
+        self.storage.put(packshot_key, make_png(), "image/png")
+        self.storage.put_json(f"packshots/{slug}/manifest.json", [{"file": "sku-a.png", "annotation_name": "SKU A"}])
+        toolkit_library._refresh_gallery(self.storage, "testing", slug)
+        toolkit_library._refresh_gallery(self.storage, "packshots", slug)
+
+        deleted = self.client.delete(f"/api/tools/packshots/{slug}")
+        self.assertEqual(deleted.status_code, 200, deleted.text)
+        self.assertEqual(deleted.json()["deleted"], 1)
+        self.assertFalse(self.storage.exists(packshot_key))
+        self.assertTrue(self.storage.exists(testing_key))
+        self.assertEqual(len(self.client.get(f"/api/tools/testing/{slug}/images").json()["images"]), 1)
+
     def test_packshot_mapping_upload_replace_and_zip_download(self):
         workbook = Workbook()
         sheet = workbook.active
