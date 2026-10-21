@@ -70,6 +70,29 @@ class ToolkitLibraryApiTests(unittest.TestCase):
         filtered = self.client.get(f"/api/tools/testing/{self.brand['slug']}/images?asset=drinks").json()
         self.assertEqual(len(filtered["images"]), 2)
 
+    def test_testing_asset_display_names_preserve_original_case_and_filter_by_slug(self):
+        response = self.client.post(
+            f"/api/tools/testing/{self.brand['slug']}/upload",
+            data={"relative_paths": '["CA Berry Mint 55g/photo.png", "CA ME Xmen Pillow Bag & Co./photo.png", "5 Gum Peppermint Cobalt/photo.png"]'},
+            files=[("files", ("photo.png", make_png(), "image/png")), ("files", ("photo.png", make_png(), "image/png")), ("files", ("photo.png", make_png(), "image/png"))],
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+
+        gallery = self.client.get(f"/api/tools/testing/{self.brand['slug']}/images").json()
+        self.assertEqual(gallery["asset_names"], {
+            "ca-berry-mint-55g": "CA Berry Mint 55g",
+            "ca-me-xmen-pillow-bag-co": "CA ME Xmen Pillow Bag & Co.",
+            "5-gum-peppermint-cobalt": "5 Gum Peppermint Cobalt",
+        })
+        self.assertEqual(
+            {image["asset_name"] for image in gallery["images"]},
+            {"CA Berry Mint 55g", "CA ME Xmen Pillow Bag & Co.", "5 Gum Peppermint Cobalt"},
+        )
+        toolkit_library._gallery_data_cache.clear()
+        filtered = self.client.get(f"/api/tools/testing/{self.brand['slug']}/images?asset=CA-BERRY-MINT-55G").json()
+        self.assertEqual(len(filtered["images"]), 1)
+        self.assertEqual(filtered["images"][0]["asset_name"], "CA Berry Mint 55g")
+
     def test_testing_image_and_collection_deletion_leave_packshots_untouched(self):
         slug = self.brand["slug"]
         testing_key = f"testing/{slug}/random/photo.png"
