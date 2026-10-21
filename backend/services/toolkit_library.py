@@ -347,6 +347,13 @@ def _delete_gallery_images(storage, kind, slug, requested_keys=None):
     return len(deleted_keys)
 
 
+def require_delete_permission(user):
+    """Single authorization seam for gallery deletion; sessions are enforced by auth middleware."""
+    if not user:
+        raise HTTPException(401, "Authentication required")
+    return user
+
+
 def _version_for(entry):
     value = str(entry.get("etag") or f"{entry.get('last_modified') or 0}-{entry.get('size') or 0}").strip('"')
     return re.sub(r"[^A-Za-z0-9._-]", "_", value) or "0"
@@ -909,6 +916,7 @@ def update_testing_asset_names(brand_slug: str, request: Request, relative_paths
 
 @router.delete("/testing/{brand_slug}/images")
 def delete_testing_images(brand_slug: str, request: Request, keys: list[str] = Body(...)):
+    require_delete_permission(getattr(request.state, "user", None))
     storage = request.app.state.storage
     _brand(storage, brand_slug)
     deleted = _delete_gallery_images(storage, "testing", brand_slug, keys)
@@ -917,6 +925,7 @@ def delete_testing_images(brand_slug: str, request: Request, keys: list[str] = B
 
 @router.delete("/testing/{brand_slug}")
 def delete_all_testing_images(brand_slug: str, request: Request):
+    require_delete_permission(getattr(request.state, "user", None))
     storage = request.app.state.storage
     _brand(storage, brand_slug)
     deleted = _delete_gallery_images(storage, "testing", brand_slug)
@@ -1122,6 +1131,7 @@ def list_packshots(brand_slug: str, request: Request):
 
 @router.delete("/packshots/{brand_slug}/images")
 def delete_packshot_images(brand_slug: str, request: Request, keys: list[str] = Body(...)):
+    require_delete_permission(getattr(request.state, "user", None))
     storage = request.app.state.storage
     _brand(storage, brand_slug)
     deleted = _delete_gallery_images(storage, "packshots", brand_slug, keys)
@@ -1130,6 +1140,7 @@ def delete_packshot_images(brand_slug: str, request: Request, keys: list[str] = 
 
 @router.delete("/packshots/{brand_slug}")
 def delete_all_packshots(brand_slug: str, request: Request):
+    require_delete_permission(getattr(request.state, "user", None))
     storage = request.app.state.storage
     _brand(storage, brand_slug)
     deleted = _delete_gallery_images(storage, "packshots", brand_slug)
