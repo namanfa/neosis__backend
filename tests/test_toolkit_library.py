@@ -93,6 +93,26 @@ class ToolkitLibraryApiTests(unittest.TestCase):
         self.assertEqual(len(filtered["images"]), 1)
         self.assertEqual(filtered["images"][0]["asset_name"], "CA Berry Mint 55g")
 
+    def test_existing_testing_asset_names_can_be_repaired_without_reupload(self):
+        slug = self.brand["slug"]
+        existing_key = f"testing/{slug}/ca-berry-mint-55g/photo.png"
+        self.storage.put(existing_key, make_png(), "image/png")
+        initial = self.client.get(f"/api/tools/testing/{slug}/images").json()
+        self.assertEqual(initial["asset_names"]["ca-berry-mint-55g"], "ca-berry-mint-55g")
+
+        response = self.client.post(
+            f"/api/tools/testing/{slug}/asset-names",
+            json=["CA Berry Mint 55g/photo.png"],
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["asset_names"], {"ca-berry-mint-55g": "CA Berry Mint 55g"})
+        self.assertTrue(self.storage.exists(existing_key))
+
+        toolkit_library._gallery_data_cache.clear()
+        gallery = self.client.get(f"/api/tools/testing/{slug}/images?asset=CA-BERRY-MINT-55G").json()
+        self.assertEqual(len(gallery["images"]), 1)
+        self.assertEqual(gallery["images"][0]["asset_name"], "CA Berry Mint 55g")
+
     def test_testing_image_and_collection_deletion_leave_packshots_untouched(self):
         slug = self.brand["slug"]
         testing_key = f"testing/{slug}/random/photo.png"

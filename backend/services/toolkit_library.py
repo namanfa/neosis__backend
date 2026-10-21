@@ -884,6 +884,29 @@ def list_testing_images(brand_slug: str, request: Request, asset: str = "all"):
     return _json_response(request, {"images": images, "assets": manifest["assets"], "asset_names": manifest.get("asset_names", {})}, started, list_ms, 1 if rebuilt else 0, signing_ms)
 
 
+@router.post("/testing/{brand_slug}/asset-names")
+def update_testing_asset_names(brand_slug: str, request: Request, relative_paths: list[str] = Body(...)):
+    """Update display names from source folder paths without uploading or moving images."""
+    storage = request.app.state.storage
+    _brand(storage, brand_slug)
+    manifest, _ = _gallery_manifest(storage, "testing", brand_slug, bypass_memory=True)
+    existing_assets = set(manifest.get("assets", []))
+    labels = {}
+    for relative_path in relative_paths:
+        if not isinstance(relative_path, str) or "\x00" in relative_path or "\\" in relative_path:
+            raise HTTPException(400, "Invalid folder path metadata")
+        parts = relative_path.split("/")
+        if len(parts) < 2 or any(part in {"", ".", ".."} for part in parts) or _filename(relative_path) is None:
+            continue
+        asset_slug = _slug(parts[0], "Asset")
+        if asset_slug in existing_assets:
+            labels[asset_slug] = parts[0]
+    if not labels:
+        raise HTTPException(404, "No existing asset folders matched the selected source folder")
+    _refresh_gallery(storage, "testing", brand_slug, asset_names=labels)
+    return {"updated": len(labels), "asset_names": labels, "library": "testing", "brand_slug": brand_slug}
+
+
 @router.delete("/testing/{brand_slug}/images")
 def delete_testing_images(brand_slug: str, request: Request, keys: list[str] = Body(...)):
     storage = request.app.state.storage
