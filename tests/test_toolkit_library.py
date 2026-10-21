@@ -67,6 +67,8 @@ class ToolkitLibraryApiTests(unittest.TestCase):
         gallery = self.client.get(f"/api/tools/testing/{self.brand['slug']}/images").json()
         self.assertEqual(len(gallery["images"]), 3)
         self.assertEqual(gallery["assets"], ["drinks"])
+        self.assertEqual(gallery["asset_counts"], {"drinks": 2, "general": 1})
+        self.assertEqual(gallery["asset_names"], {"drinks": "drinks"})
         filtered = self.client.get(f"/api/tools/testing/{self.brand['slug']}/images?asset=drinks").json()
         self.assertEqual(len(filtered["images"]), 2)
 
@@ -98,7 +100,8 @@ class ToolkitLibraryApiTests(unittest.TestCase):
         existing_key = f"testing/{slug}/ca-berry-mint-55g/photo.png"
         self.storage.put(existing_key, make_png(), "image/png")
         initial = self.client.get(f"/api/tools/testing/{slug}/images").json()
-        self.assertEqual(initial["asset_names"]["ca-berry-mint-55g"], "ca-berry-mint-55g")
+        self.assertEqual(initial["asset_names"], {})
+        self.assertNotIn("asset_name", initial["images"][0])
 
         response = self.client.post(
             f"/api/tools/testing/{slug}/asset-names",
@@ -112,6 +115,43 @@ class ToolkitLibraryApiTests(unittest.TestCase):
         gallery = self.client.get(f"/api/tools/testing/{slug}/images?asset=CA-BERRY-MINT-55G").json()
         self.assertEqual(len(gallery["images"]), 1)
         self.assertEqual(gallery["images"][0]["asset_name"], "CA Berry Mint 55g")
+
+        # Labels live in durable storage and survive dropping/rebuilding the gallery index.
+        toolkit_library._gallery_data_cache.clear()
+        self.storage.delete(toolkit_library._gallery_index_key("testing", slug))
+        rebuilt = self.client.get(f"/api/tools/testing/{slug}/images").json()
+        self.assertEqual(rebuilt["asset_names"]["ca-berry-mint-55g"], "CA Berry Mint 55g")
+        brand_row = next(row for row in self.client.get("/api/tools/brands").json()["brands"] if row["slug"] == slug)
+        self.assertEqual(brand_row["testing_asset_names"]["ca-berry-mint-55g"], "CA Berry Mint 55g")
+
+    def test_testing_asset_names_keep_first_case_and_unicode_labels(self):
+        slug = self.brand["slug"]
+        for folder in ("GT", "gt", "Co.op Phan Thiết Column", "CA Berry (Mint) & More", "COC Topline (AW DMR)", "Team-X Shelf"):
+            response = self.client.post(
+                f"/api/tools/testing/{slug}/upload",
+                data={"relative_paths": __import__("json").dumps([f"{folder}/photo.png"], ensure_ascii=False)},
+                files=[("files", ("photo.png", make_png(), "image/png"))],
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+        gallery = self.client.get(f"/api/tools/testing/{slug}/images").json()
+        self.assertEqual(gallery["asset_names"]["gt"], "GT")
+        self.assertEqual(gallery["asset_names"][toolkit_library._slug("COC Topline (AW DMR)", "Asset")], "COC Topline (AW DMR)")
+        unicode_slug = toolkit_library._slug("Co.op Phan Thiết Column", "Asset")
+        self.assertEqual(gallery["asset_names"][unicode_slug], "Co.op Phan Thiết Column")
+        punctuation_slug = toolkit_library._slug("CA Berry (Mint) & More", "Asset")
+        self.assertEqual(gallery["asset_names"][punctuation_slug], "CA Berry (Mint) & More")
+        self.assertEqual(gallery["asset_names"][toolkit_library._slug("Team-X Shelf", "Asset")], "Team-X Shelf")
+        self.assertEqual(gallery["asset_counts"]["gt"], 2)
+
+    def test_corrupt_asset_name_metadata_does_not_break_listing(self):
+        slug = self.brand["slug"]
+        self.storage.put(f"testing/{slug}/legacy/photo.png", make_png(), "image/png")
+        self.storage.put(toolkit_library._asset_names_key(slug), b"{invalid-json", "application/json")
+        toolkit_library._gallery_data_cache.clear()
+        response = self.client.get(f"/api/tools/testing/{slug}/images")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["assets"], ["legacy"])
+        self.assertEqual(response.json()["asset_names"], {})
 
     def test_testing_image_and_collection_deletion_leave_packshots_untouched(self):
         slug = self.brand["slug"]

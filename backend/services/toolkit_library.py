@@ -1,6 +1,7 @@
 """Local-first APIs for Testing Images and Packshots."""
 import asyncio
 import csv
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 import hashlib
@@ -161,11 +162,20 @@ def _scan_brand_entries(storage, brands):
     result = {}
     for brand in brands:
         slug = brand.get("slug", "")
-        testing = pairs.get(slug, {}).get("testing", [])
+        testing = [entry for entry in pairs.get(slug, {}).get("testing", []) if os.path.splitext(entry["key"])[1].lower() in IMAGE_EXTENSIONS]
         packshots = [entry for entry in pairs.get(slug, {}).get("packshots", []) if entry["key"].rsplit("/", 1)[-1] != MANIFEST]
+        asset_counts = {}
+        for entry in testing:
+            parts = entry["key"].split("/")
+            if len(parts) > 3:
+                asset_counts[parts[2]] = asset_counts.get(parts[2], 0) + 1
+        saved_names = _read_asset_names(storage, slug)
+        saved_names = {asset: label for asset, label in saved_names.items() if asset in asset_counts}
         result[slug] = {
             "testing_count": len(testing),
-            "testing_assets": sorted({entry["key"].split("/")[2] for entry in testing if len(entry["key"].split("/")) > 3}),
+            "testing_assets": sorted(asset_counts),
+            "testing_asset_names": saved_names,
+            "testing_asset_counts": asset_counts,
             "packshot_count": len(packshots),
             "logo": brand.get("logo"),
         }
@@ -206,6 +216,42 @@ def _gallery_index_key(kind, slug):
     return f"{GALLERY_INDEX_PREFIX}/{kind}/{slug}.json"
 
 
+def _asset_names_key(brand_slug):
+    return f"_index/asset_names/testing/{brand_slug}.json"
+
+
+def _read_asset_names(storage, brand_slug):
+    """Read durable Testing asset labels. Missing or malformed metadata is empty."""
+    try:
+        data = storage.get_json(_asset_names_key(brand_slug))
+    except Exception:
+        return {}
+    labels = data.get("asset_names", data) if isinstance(data, dict) else {}
+    if not isinstance(labels, dict):
+        return {}
+    return {
+        str(slug): label.strip()
+        for slug, label in labels.items()
+        if isinstance(slug, str) and isinstance(label, str) and label.strip()
+    }
+
+
+def _remember_asset_names(storage, brand_slug, candidates):
+    """Persist first-seen exact labels without replacing existing labels."""
+    if not candidates:
+        return _read_asset_names(storage, brand_slug)
+    with _index_lock:
+        labels = _read_asset_names(storage, brand_slug)
+        changed = False
+        for slug, label in candidates.items():
+            if isinstance(slug, str) and isinstance(label, str) and label.strip() and slug not in labels:
+                labels[slug] = label.strip()
+                changed = True
+        if changed:
+            storage.put_json(_asset_names_key(brand_slug), {"version": 1, "asset_names": labels})
+        return labels
+
+
 def _scan_gallery(storage, kind, slug, entries=None, dimensions=None, derivative_decisions=None, previous=None, asset_names=None):
     prefix = f"{kind}/{slug}"
     entries = entries if entries is not None else storage.list_entries(prefix)
@@ -234,7 +280,7 @@ def _scan_gallery(storage, kind, slug, entries=None, dimensions=None, derivative
         old_record = (previous or {}).get(key, {})
         derivative = (derivative_decisions or {}).get(key, label.get("derivative", old_record.get("derivative")))
         record = {
-            "key": key, "file": name, "asset": asset, "asset_name": (asset_names or {}).get(asset) or old_record.get("asset_name") or asset, "size": int(entry.get("size") or 0), "etag": version,
+            "key": key, "file": name, "asset": asset, "size": int(entry.get("size") or 0), "etag": version,
             "width": known_dimensions.get("width"), "height": known_dimensions.get("height"),
             "annotation_name": label.get("annotation_name", os.path.splitext(name)[0]),
             "name": label.get("name", ""), "id": label.get("id", ""),
@@ -242,11 +288,51 @@ def _scan_gallery(storage, kind, slug, entries=None, dimensions=None, derivative
         }
         record["width"] = record["width"] or old_record.get("width")
         record["height"] = record["height"] or old_record.get("height")
+        asset_name = (asset_names or {}).get(asset) if asset and asset != "general" else None
+        if asset_name:
+            record["asset_name"] = asset_name
+        elif old_record.get("asset_name") and old_record.get("asset_name") != asset:
+            record["asset_name"] = old_record["asset_name"]
         record["derivative"] = derivative
         record["label_etag"] = _label_etag(record, name)
         records.append(record)
-    display_names = {asset: (asset_names or {}).get(asset) or next((row["asset_name"] for row in records if row["asset"] == asset and row.get("asset_name")), asset) for asset in sorted(assets)}
-    return {"version": 2, "images": records, "assets": sorted(assets), "asset_names": display_names}
+    display_names = {asset: (asset_names or {})[asset] for asset in sorted(assets) if (asset_names or {}).get(asset)}
+    counts = Counter(row["asset"] for row in records)
+    asset_counts = {asset: counts[asset] for asset in sorted(assets)}
+    if counts["general"]:
+        asset_counts["general"] = counts["general"]
+    return {"version": 2, "images": records, "assets": sorted(assets), "asset_names": display_names, "asset_counts": asset_counts}
+
+
+def _apply_asset_names(manifest, labels):
+    """Hydrate a cached gallery index from durable labels without inventing names."""
+    result = dict(manifest)
+    assets = result.get("assets", [])
+    legacy = result.get("asset_names", {})
+    if not isinstance(legacy, dict):
+        legacy = {}
+    names = {
+        asset: (labels.get(asset) or (legacy.get(asset) if legacy.get(asset) != asset else ""))
+        for asset in assets
+    }
+    names = {asset: label for asset, label in names.items() if isinstance(label, str) and label}
+    rows = []
+    for old_row in result.get("images", []):
+        row = dict(old_row)
+        asset = row.get("asset")
+        if names.get(asset):
+            row["asset_name"] = names[asset]
+        elif row.get("asset_name") == asset:
+            row.pop("asset_name", None)
+        rows.append(row)
+    result["images"] = rows
+    result["asset_names"] = names
+    row_counts = Counter(row.get("asset") for row in rows)
+    counts = {asset: row_counts[asset] for asset in assets if row_counts[asset]}
+    if row_counts["general"]:
+        counts["general"] = row_counts["general"]
+    result["asset_counts"] = counts
+    return result
 
 
 def _gallery_manifest(storage, kind, slug, bypass_memory=False):
@@ -258,11 +344,17 @@ def _gallery_manifest(storage, kind, slug, bypass_memory=False):
     try:
         data = storage.get_json(cache_key)
         if isinstance(data, dict) and data.get("version") == 2 and isinstance(data.get("images"), list) and isinstance(data.get("assets"), list):
+            if kind == "testing":
+                legacy = data.get("asset_names", {})
+                legacy_labels = {asset: label for asset, label in legacy.items() if asset in data["assets"] and isinstance(label, str) and label and label != asset} if isinstance(legacy, dict) else {}
+                labels = _remember_asset_names(storage, slug, legacy_labels)
+                data = _apply_asset_names(data, labels)
             _gallery_data_cache[memory_key] = (time.monotonic() + 15, data)
             return data, False
     except Exception:
         pass
-    data = _scan_gallery(storage, kind, slug)
+    labels = _read_asset_names(storage, slug) if kind == "testing" else {}
+    data = _scan_gallery(storage, kind, slug, asset_names=labels)
     storage.put_json(cache_key, data)
     _gallery_data_cache[memory_key] = (time.monotonic() + 15, data)
     return data, True
@@ -285,7 +377,14 @@ def _refresh_gallery(storage, kind, slug, entries=None, dimensions=None, derivat
                 previous = {}
         if not isinstance(previous_asset_names, dict):
             previous_asset_names = {}
-        merged_asset_names = {**previous_asset_names, **(asset_names or {})}
+        merged_asset_names = _read_asset_names(storage, slug) if kind == "testing" else {}
+        # Carry forward only genuine labels from older gallery indexes, never the
+        # slug-as-label fallback produced by earlier versions.
+        if kind == "testing":
+            for asset, label in previous_asset_names.items():
+                if isinstance(label, str) and label and label != asset:
+                    merged_asset_names.setdefault(asset, label)
+            merged_asset_names = _remember_asset_names(storage, slug, {**merged_asset_names, **(asset_names or {})})
         data = _scan_gallery(storage, kind, slug, entries, dimensions, derivative_decisions, previous, merged_asset_names)
         storage.put_json(_gallery_index_key(kind, slug), data)
         _gallery_data_cache[(_storage_cache_key(storage), kind, slug)] = (time.monotonic() + 15, data)
@@ -794,10 +893,15 @@ def list_tool_brands(request: Request):
         slug = brand.get("slug", "")
         inventory = indexed.get(slug, {})
         logo = inventory.get("logo") or brand.get("logo") or {}
+        testing_assets = inventory.get("testing_assets", [])
+        testing_asset_names = _read_asset_names(storage, slug)
+        testing_asset_names = {asset: label for asset, label in testing_asset_names.items() if asset in testing_assets}
         result.append({
             **brand,
             "testing_count": inventory.get("testing_count", 0),
             "testing_assets": inventory.get("testing_assets", []),
+            "testing_asset_names": testing_asset_names,
+            "testing_asset_counts": inventory.get("testing_asset_counts", {}),
             "packshot_count": inventory.get("packshot_count", 0),
             "logo_url": f"/api/tools/logos/{quote(slug, safe='')}/{quote(logo.get('version', ''), safe='')}{os.path.splitext(logo.get('key', ''))[1]}" if logo.get("key") else None,
         })
@@ -888,7 +992,7 @@ def list_testing_images(brand_slug: str, request: Request, asset: str = "all"):
         }
         images.append(image)
     signing_ms = (time.perf_counter() - signing_started) * 1000
-    return _json_response(request, {"images": images, "assets": manifest["assets"], "asset_names": manifest.get("asset_names", {})}, started, list_ms, 1 if rebuilt else 0, signing_ms)
+    return _json_response(request, {"images": images, "assets": manifest["assets"], "asset_names": manifest.get("asset_names", {}), "asset_counts": manifest.get("asset_counts", {})}, started, list_ms, 1 if rebuilt else 0, signing_ms)
 
 
 @router.post("/testing/{brand_slug}/asset-names")
@@ -907,11 +1011,12 @@ def update_testing_asset_names(brand_slug: str, request: Request, relative_paths
             continue
         asset_slug = _slug(parts[0], "Asset")
         if asset_slug in existing_assets:
-            labels[asset_slug] = parts[0]
+            labels.setdefault(asset_slug, parts[0].strip())
     if not labels:
         raise HTTPException(404, "No existing asset folders matched the selected source folder")
-    _refresh_gallery(storage, "testing", brand_slug, asset_names=labels)
-    return {"updated": len(labels), "asset_names": labels, "library": "testing", "brand_slug": brand_slug}
+    saved_labels = _remember_asset_names(storage, brand_slug, labels)
+    _refresh_gallery(storage, "testing", brand_slug, asset_names=saved_labels)
+    return {"updated": len(labels), "asset_names": {asset: saved_labels[asset] for asset in labels}, "library": "testing", "brand_slug": brand_slug}
 
 
 @router.delete("/testing/{brand_slug}/images")
@@ -1036,7 +1141,11 @@ async def upload_testing_images(
                 derivative_decisions[key] = "generated" if _derivative_gate(len(data), width, height) else "none"
             except Exception:
                 pass
-    asset_names = {key.rsplit("/", 2)[-2]: display_name for key, display_name in pending_asset_names.items() if key not in write_failures}
+    asset_names = {}
+    for key, display_name in pending_asset_names.items():
+        if key not in write_failures:
+            asset_names.setdefault(key.rsplit("/", 2)[-2], display_name.strip())
+    asset_names = _remember_asset_names(storage, brand_slug, asset_names)
     _refresh_gallery(storage, "testing", brand_slug, entries, dimension_map, derivative_decisions, asset_names)
     for key, data, _, _ in pending:
         if key not in write_failures:
