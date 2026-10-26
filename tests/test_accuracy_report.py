@@ -1,3 +1,4 @@
+import asyncio
 import io
 import json
 import os
@@ -302,6 +303,61 @@ class AccuracyReportTests(unittest.TestCase):
         self.assertNotIn("another-token", "\n".join(captured.output))
         self.assertNotIn("private provider response", failure.text)
         self.assertFalse((self.directory / "result.json").exists())
+
+    def test_drive_create_uses_private_resumable_docx_import_flow(self):
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, status_code, headers=None, data=None):
+                self.status_code = status_code
+                self.headers = headers or {}
+                self._data = data or {}
+
+            def json(self):
+                return self._data
+
+        class FakeClient:
+            def __init__(self, **kwargs): pass
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): return None
+
+            async def post(self, url, **kwargs):
+                calls.append(("post", url, kwargs))
+                return FakeResponse(200, {"Location": "https://www.googleapis.com/upload/session-123"})
+
+            async def put(self, url, **kwargs):
+                calls.append(("put", url, kwargs))
+                return FakeResponse(200, data={"id": "google-doc-id", "webViewLink": "https://docs.google.com/document/d/google-doc-id/edit"})
+
+        with patch.object(report.httpx, "AsyncClient", FakeClient):
+            result = asyncio.run(report._drive_create("test-access-token", b"docx-bytes", "Report title"))
+
+        self.assertEqual(result, ("google-doc-id", "https://docs.google.com/document/d/google-doc-id/edit"))
+        method, url, kwargs = calls[0]
+        self.assertEqual(method, "post")
+        self.assertIn("uploadType=resumable", url)
+        self.assertIn("ignoreDefaultVisibility=true", url)
+        self.assertEqual(kwargs["json"], {"name": "Report title", "mimeType": "application/vnd.google-apps.document"})
+        self.assertEqual(kwargs["headers"]["Authorization"], "Bearer test-access-token")
+        self.assertEqual(kwargs["headers"]["X-Upload-Content-Length"], str(len(b"docx-bytes")))
+        method, url, kwargs = calls[1]
+        self.assertEqual((method, url), ("put", "https://www.googleapis.com/upload/session-123"))
+        self.assertEqual(kwargs["content"], b"docx-bytes")
+
+    def test_drive_create_rejects_non_google_resumable_location(self):
+        class FakeResponse:
+            status_code = 200
+            headers = {"Location": "https://attacker.invalid/upload/session"}
+
+        class FakeClient:
+            def __init__(self, **kwargs): pass
+            async def __aenter__(self): return self
+            async def __aexit__(self, *args): return None
+            async def post(self, *args, **kwargs): return FakeResponse()
+
+        with patch.object(report.httpx, "AsyncClient", FakeClient):
+            with self.assertRaisesRegex(RuntimeError, "invalid upload location"):
+                asyncio.run(report._drive_create("test-access-token", b"docx", "Report title"))
 
     def test_generate_200_image_report_streams_all_images_to_mocked_drive(self):
         images_dir = self.directory / "images"
