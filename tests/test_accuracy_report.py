@@ -206,6 +206,37 @@ class AccuracyReportTests(unittest.TestCase):
         self.assertIn("Missing: ", text)
         self.assertIn("Accuracy: ", text)
 
+    def test_docx_uses_sequential_image_numbers_left_alignment_and_page_fit(self):
+        sources = {}
+        blocks = []
+        for index, size in enumerate(((4000, 6000), (6000, 3000)), start=1):
+            source = self.directory / f"source-{index}.jpg"
+            Image.new("RGB", size, "white").save(source, format="JPEG")
+            key = f"key-{index}"
+            sources[key] = str(source)
+            blocks.append({"image_key": key, "image_name": f"customer-photo-{index}.jpg", "items": [],
+                           "invalid_prediction": False})
+        output = Path(self.temp.name) / "layout-report.docx"
+        report._build_docx({"format": 1, "blocks": blocks}, self.directory, "Layout", output, sources, report.limits())
+        with zipfile.ZipFile(output) as archive:
+            root = ET.fromstring(archive.read("word/document.xml"))
+        w = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+        texts = [element.text or "" for element in root.iter(w + "t")]
+        self.assertIn("Image 1", texts)
+        self.assertIn("Image 2", texts)
+        self.assertFalse(any(text.startswith("customer-photo-") for text in texts))
+        self.assertTrue(all(p.find(w + "pPr/" + w + "jc").get(w + "val") == "left"
+                            for p in root.iter(w + "p")))
+        section = root.find(".//" + w + "sectPr")
+        page_size = section.find(w + "pgSz")
+        self.assertEqual((page_size.get(w + "w"), page_size.get(w + "h")), ("12240", "15840"))
+        self.assertEqual(section.find(w + "pgMar").get(w + "left"), "720")
+        extents = root.findall(".//{http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing}extent")
+        self.assertEqual(len(extents), 2)
+        for extent in extents:
+            self.assertLessEqual(int(extent.get("cx")), 6858000)
+            self.assertLessEqual(int(extent.get("cy")), 5486400)
+
     def test_google_authorize_requests_drive_file_and_oauth_decline_missing_permission_success(self):
         response = self.client.get(f"/api/accuracy-report/google/authorize?session_id={self.session_id}", follow_redirects=False)
         self.assertEqual(response.status_code, 302)

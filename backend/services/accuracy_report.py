@@ -218,6 +218,8 @@ def _build_docx(preview, image_dir, title, output_file, image_urls, config):
 
     def paragraph(text="", *, bold=False, size=None, page_break=False):
         p = ET.SubElement(body, q("w", "p"))
+        p_props = ET.SubElement(p, q("w", "pPr"))
+        ET.SubElement(p_props, q("w", "jc"), {q("w", "val"): "left"})
         if page_break:
             run = ET.SubElement(p, q("w", "r"))
             ET.SubElement(run, q("w", "br"), {q("w", "type"): "page"})
@@ -233,6 +235,8 @@ def _build_docx(preview, image_dir, title, output_file, image_urls, config):
 
     def cell_text(cell, text, bold=False):
         p = ET.SubElement(cell, q("w", "p"))
+        p_props = ET.SubElement(p, q("w", "pPr"))
+        ET.SubElement(p_props, q("w", "jc"), {q("w", "val"): "left"})
         r = ET.SubElement(p, q("w", "r"))
         if bold:
             ET.SubElement(ET.SubElement(r, q("w", "rPr")), q("w", "b"))
@@ -242,9 +246,16 @@ def _build_docx(preview, image_dir, title, output_file, image_urls, config):
         rel_id = "rId" + str(index + 1)
         with Image.open(path) as image:
             width, height = image.size
-        width_emu = 5669280
-        height_emu = max(1, int(width_emu * height / width))
-        drawing = ET.SubElement(ET.SubElement(ET.SubElement(body, q("w", "p")), q("w", "r")), q("w", "drawing"))
+        # Letter page with 0.5in margins: keep each image within a generous
+        # content box so the image itself cannot spill onto a second page.
+        max_width_emu, max_height_emu = 6858000, 5486400
+        scale = min(max_width_emu / width, max_height_emu / height)
+        width_emu = max(1, int(width * scale))
+        height_emu = max(1, int(height * scale))
+        image_paragraph = ET.SubElement(body, q("w", "p"))
+        p_props = ET.SubElement(image_paragraph, q("w", "pPr"))
+        ET.SubElement(p_props, q("w", "jc"), {q("w", "val"): "left"})
+        drawing = ET.SubElement(ET.SubElement(image_paragraph, q("w", "r")), q("w", "drawing"))
         inline = ET.SubElement(drawing, q("wp", "inline"), {"distT": "0", "distB": "0", "distL": "0", "distR": "0"})
         ET.SubElement(inline, q("wp", "extent"), {"cx": str(width_emu), "cy": str(height_emu)})
         ET.SubElement(inline, q("wp", "docPr"), {"id": str(index + 1), "name": f"Image {index + 1}"})
@@ -285,7 +296,7 @@ def _build_docx(preview, image_dir, title, output_file, image_urls, config):
                   ("SKU Detected", str(block["total_detected"]) if valid_format2 else ""),
                   ("Incorrect", ""), ("Missing", ""), ("Accuracy", "")]
         for label, value in values:
-            p = ET.SubElement(body, q("w", "p")); r = ET.SubElement(p, q("w", "r")); ET.SubElement(ET.SubElement(r, q("w", "rPr")), q("w", "b")); ET.SubElement(r, q("w", "t")).text = label + ": "
+            p = ET.SubElement(body, q("w", "p")); p_props = ET.SubElement(p, q("w", "pPr")); ET.SubElement(p_props, q("w", "jc"), {q("w", "val"): "left"}); r = ET.SubElement(p, q("w", "r")); ET.SubElement(ET.SubElement(r, q("w", "rPr")), q("w", "b")); ET.SubElement(r, q("w", "t")).text = label + ": "
             if value:
                 ET.SubElement(ET.SubElement(p, q("w", "r")), q("w", "t")).text = value
         if preview["format"] == 2:
@@ -296,7 +307,12 @@ def _build_docx(preview, image_dir, title, output_file, image_urls, config):
                 rows.extend([[item["sku_name"], item["detected"], item["available"], ""] for item in block["items"]])
                 rows.append(["Total", block["total_detected"], block["total_available"], ""])
                 add_table(rows)
-    ET.SubElement(body, q("w", "sectPr"))
+    section = ET.SubElement(body, q("w", "sectPr"))
+    ET.SubElement(section, q("w", "pgSz"), {q("w", "w"): "12240", q("w", "h"): "15840"})
+    ET.SubElement(section, q("w", "pgMar"), {q("w", "top"): "720", q("w", "right"): "720",
+                                                 q("w", "bottom"): "720", q("w", "left"): "720",
+                                                 q("w", "header"): "360", q("w", "footer"): "360",
+                                                 q("w", "gutter"): "0"})
     document_xml = ET.tostring(doc, encoding="utf-8", xml_declaration=True)
     content_types = ET.Element(q("ct", "Types"))
     ET.SubElement(content_types, q("ct", "Default"), {"Extension": "rels", "ContentType": "application/vnd.openxmlformats-package.relationships+xml"})
