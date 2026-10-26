@@ -39,13 +39,15 @@ if not os.environ.get("SESSION_BASE_DIR"):
 SESSION_BASE_DIR = os.environ["SESSION_BASE_DIR"]
 os.makedirs(SESSION_BASE_DIR, exist_ok=True)
 
-from services import upload_handler, inference_engine, analytics, preview, export, converter, image_extraction, library, toolkit_library, auth
+from services import upload_handler, inference_engine, analytics, preview, export, converter, image_extraction, library, toolkit_library, auth, control_panel, control_panel_store, model_dashboard, model_dashboard_store, model_dashboard_sync, accuracy_report
+from services.tenant_blob_provider import AzureBlobProvider
 from services import auth_store
 from storage import get_storage
 from storage.brands import get_brands
 
 app = FastAPI(title="SKU Labeler API")
 app.state.storage = get_storage()
+app.state.tenant_blob_provider = AzureBlobProvider()
 get_brands(app.state.storage)
 
 
@@ -60,6 +62,9 @@ def _warm_inference_imports():
 @app.on_event("startup")
 async def start_inference_import_warmup():
     auth_store.init_auth_store()
+    control_panel_store.init_control_panel_store()
+    model_dashboard_store.init_model_dashboard_store()
+    model_dashboard_sync.start_scheduler()
     threading.Thread(target=_warm_inference_imports, name="inference-import-warmup", daemon=True).start()
 
 app.add_middleware(auth.AuthMiddleware)
@@ -86,6 +91,10 @@ app.include_router(image_extraction.router, tags=["Image Extraction"])
 app.include_router(library.router, tags=["Library Storage"])
 app.include_router(toolkit_library.router)
 app.include_router(auth.router)
+app.include_router(control_panel.router)
+app.include_router(model_dashboard.router)
+app.include_router(model_dashboard.sync_router)
+app.include_router(accuracy_report.router)
 
 # These source files are compiled by the browser, so always revalidate them and
 # the app shell before reuse. This prevents a cached page from mixing releases.

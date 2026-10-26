@@ -30,5 +30,6 @@ def validate_session(session_id: str, owner_email: str = None):
         return False
     if not owner_email or not auth_store.owns_tool_session(session_id, owner_email):
         return False
+    auth_store.touch_tool_session(session_id)
     return os.path.isdir(get_session_dir(session_id))
 

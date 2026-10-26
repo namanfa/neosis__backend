@@ -7,6 +7,7 @@ from PIL import Image
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from .session_manager import get_session_dir, validate_session
+from .session_cleanup import operation_lease
 
 router = APIRouter()
 
@@ -226,4 +227,9 @@ async def run_inference(session_id: str, request: Request, conf: float = 0.25, i
     if not validate_session(session_id, request.state.user["email"]):
         raise HTTPException(status_code=404, detail="Session not found")
 
-    return StreamingResponse(run_inference_generator(session_id, conf, iou, agnostic_nms, batch_size), media_type="text/event-stream")
+    async def guarded_events():
+        with operation_lease(session_id, "tool_session", "inference"):
+            async for event in run_inference_generator(session_id, conf, iou, agnostic_nms, batch_size):
+                yield event
+
+    return StreamingResponse(guarded_events(), media_type="text/event-stream")

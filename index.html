@@ -83,9 +83,16 @@
 
     <script>
         function currentNextPath() { return window.location.pathname + window.location.search + window.location.hash; }
+        performance.mark("neosis-app-start");
+        function markBoot(name, start, end) {
+            performance.mark(name);
+            try { performance.measure(name, start, end || name); } catch (_) {}
+        }
         (async function() {
             try {
+                performance.mark("neosis-auth-start");
                 const authResponse = await fetch("/auth/me", { credentials: "same-origin" });
+                markBoot("neosis-auth-complete", "neosis-auth-start");
                 if (authResponse.status === 401) {
                     window.location.replace("/login?next=" + encodeURIComponent(currentNextPath()));
                     return;
@@ -104,6 +111,7 @@
                         return response;
                     });
                 };
+                performance.mark("neosis-jsx-fetch-start");
                 const [toolkitResponse, response] = await Promise.all([
                     fetch("/ToolkitPages.jsx"),
                     fetch("/SKULabeler.jsx")
@@ -111,11 +119,16 @@
                 if (!toolkitResponse.ok) throw new Error("Failed to load toolkit pages: " + toolkitResponse.status + " " + toolkitResponse.statusText);
                 if (!response.ok) throw new Error("Failed to load application source: " + response.status + " " + response.statusText);
                 const [toolkitSource, jsxSource] = await Promise.all([toolkitResponse.text(), response.text()]);
+                markBoot("neosis-jsx-fetch-complete", "neosis-jsx-fetch-start");
+                performance.mark("neosis-babel-toolkit-start");
                 const toolkitCompiled = Babel.transform(toolkitSource, { presets: [['react', { runtime: 'classic' }]] }).code;
                 new Function(toolkitCompiled)();
+                markBoot("neosis-babel-toolkit-complete", "neosis-babel-toolkit-start");
 
+                performance.mark("neosis-babel-app-start");
                 const compiled = Babel.transform(jsxSource, { presets: [['react', { runtime: 'classic' }]] }).code;
                 new Function(compiled)();
+                markBoot("neosis-babel-app-complete", "neosis-babel-app-start");
             } catch (err) {
                 console.error("Initialization error:", err);
                 const root = document.getElementById("root");

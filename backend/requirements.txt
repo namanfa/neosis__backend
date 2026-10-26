@@ -16,3 +16,5 @@ httpx==0.28.1
 boto3
 python-dotenv
 Authlib==1.8.0
+azure-storage-blob>=12.20,<13
+cryptography>=42,<47

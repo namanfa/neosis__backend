@@ -10,11 +10,17 @@ services:
       OAUTH_REDIRECT_URI: ${OAUTH_REDIRECT_URI:-https://faneosis.duckdns.org/auth/callback}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MICROSOFT_TENANT_ID: ${MICROSOFT_TENANT_ID:-}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+      MICROSOFT_REDIRECT_URI: ${MICROSOFT_REDIRECT_URI:-}
       SESSION_SECRET: ${SESSION_SECRET:-}
       SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-480}
       SESSION_MAX_DAYS: ${SESSION_MAX_DAYS:-7}
       ALLOWED_EMAIL_DOMAINS: ${ALLOWED_EMAIL_DOMAINS:-flick2know.com,flick2know.in,fieldassist.com,fieldassist.in}
       ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
+      IR_MEMBER_EMAILS: ${IR_MEMBER_EMAILS:-naman.swarnkar@fieldassist.com,naman.swarnkar@flick2know.com}
+      TENANT_ENCRYPTION_KEY: ${TENANT_ENCRYPTION_KEY:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
       LIBRARY_DIR: ${LIBRARY_DIR:-/data/library}
@@ -34,8 +40,6 @@ services:
       - "443:443"
     environment:
       DOMAIN: ${DOMAIN}
-      AUTH_USER: ${AUTH_USER}
-      AUTH_HASH: ${AUTH_HASH}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data

@@ -3,6 +3,8 @@ import asyncio
 import zipfile
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
+from .session_cleanup import operation_lease
 from .session_manager import get_session_dir, validate_session
 
 router = APIRouter()
@@ -75,8 +77,11 @@ async def export_dataset(session_id: str, request: Request):
         await asyncio.to_thread(_build_zip, session_dir, zip_path)
 
     # FileResponse sets Content-Length automatically → browser shows real download progress
+    lease = operation_lease(session_id, "tool_session", "export")
+    lease.__enter__()
     return FileResponse(
         zip_path,
         filename=f"dataset_{session_id}.zip",
         media_type="application/zip",
+        background=BackgroundTask(lease.__exit__, None, None, None),
     )

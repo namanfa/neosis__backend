@@ -324,8 +324,8 @@ const APP_NAV_ITEMS = [
   { title:"Image Extraction", icon:"extract", route:"#/extract" },
   { title:"Testing Images", icon:"testing", route:"#/testing-images" },
   { title:"Packshots", icon:"packshots", route:"#/packshots" },
-  { title:"Model Dashboard", icon:"dashboard", soon:true },
-  { title:"Accuracy Doc", icon:"accuracy", soon:true },
+  { title:"Model Dashboard", icon:"dashboard", route:"#/model-dashboard" },
+  { title:"Accuracy Report", icon:"accuracy", route:"#/accuracy-report" },
 ];
 const NEOSIS_BRAND_NAME = window.NEOSIS_BRAND_NAME || "Neosis";
 
@@ -1460,6 +1460,9 @@ function App() {
     if (hash === "#/extract") return 5;
     if (hash === "#/testing-images" || hash.startsWith("#/testing-images/")) return 6;
     if (hash === "#/packshots" || hash.startsWith("#/packshots/")) return 7;
+    if (hash === "#/model-dashboard") return 11;
+    if (hash === "#/accuracy-report") return 12;
+    if (hash === "#/control-panel") return 10;
     return 8;
   };
   const routeBrandSlug = (hash, route) => {
@@ -1515,6 +1518,10 @@ function App() {
         {page === 6 && <window.NeosisToolkit.TestingImagesPage Shell={Shell} onToggleTheme={() => setDark(d => !d)} selectedSlug={routeBrandSlug(routeHash,"#/testing-images")} />}
         {page === 7 && <window.NeosisToolkit.PackshotsPage Shell={Shell} onToggleTheme={() => setDark(d => !d)} selectedSlug={routeBrandSlug(routeHash,"#/packshots")} />}
         {page === 8 && <window.NeosisToolkit.HomePage Shell={Shell} onToggleTheme={() => setDark(d => !d)} />}
+        {page === 9 && <window.NeosisToolkit.ComingSoonPage Shell={Shell} onToggleTheme={() => setDark(d => !d)} title={routeHash==="#/model-dashboard"?"Model Dashboard":routeHash==="#/accuracy-report"?"Accuracy Report":"Control Panel"} />}
+        {page === 10 && <window.NeosisToolkit.ControlPanelPage Shell={Shell} onToggleTheme={() => setDark(d => !d)} />}
+        {page === 11 && <window.NeosisToolkit.ModelDashboardPage Shell={Shell} onToggleTheme={() => setDark(d => !d)} />}
+        {page === 12 && <window.NeosisToolkit.AccuracyReportPage Shell={Shell} onToggleTheme={() => setDark(d => !d)} />}
         </>
       </ThemeCtx.Provider>
     </PageCtx.Provider>

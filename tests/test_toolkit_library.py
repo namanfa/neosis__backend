@@ -1,4 +1,4 @@
-"""Coverage for the local Testing Images and Packshots API flows."""
+﻿"""Coverage for the local Testing Images and Packshots API flows."""
 import io
 import os
 import sys
@@ -35,9 +35,10 @@ class ToolkitLibraryApiTests(unittest.TestCase):
         self.brand = add_brand(self.storage, "Acme Foods")
         app = FastAPI()
         app.state.storage = self.storage
+        self.current_role = "IR"
         @app.middleware("http")
         async def attach_test_user(request, call_next):
-            request.state.user = {"email": "reviewer@example.com"}
+            request.state.user = {"email": "reviewer@example.com", "role": self.current_role}
             return await call_next(request)
         app.include_router(router)
         self.client = TestClient(app)
@@ -47,11 +48,48 @@ class ToolkitLibraryApiTests(unittest.TestCase):
         toolkit_library._derivative_pool.submit(lambda: None).result(timeout=10)
         self.tempdir.cleanup()
 
+    def test_viewer_is_rejected_on_every_shared_library_mutation_route(self):
+        slug = self.brand["slug"]
+        self.current_role = "Viewer"
+        calls = [
+            ("POST", "/api/tools/brands", {"data":{"name":"Viewer Brand"}}),
+            ("POST", f"/api/tools/brands/{slug}/logo", {"files":{"logo":("logo.png", make_png(), "image/png")}}),
+            ("POST", f"/api/tools/testing/{slug}/asset-names", {"json":[]}),
+            ("DELETE", f"/api/tools/testing/{slug}/images", {"json":[]}),
+            ("DELETE", f"/api/tools/testing/{slug}", {}),
+            ("POST", f"/api/tools/testing/{slug}/upload", {"data":{"relative_paths":"[]"},"files":[("files",("image.png",make_png(),"image/png"))]}),
+            ("POST", "/api/tools/packshots/prepare", {"files":{"mapping":("map.csv",b"sku,annotation_name\nsku,Name","text/csv")}}),
+            ("DELETE", f"/api/tools/packshots/{slug}/images", {"json":[]}),
+            ("DELETE", f"/api/tools/packshots/{slug}", {}),
+            ("PATCH", f"/api/tools/packshots/{slug}/sku.png/labels", {"json":{}}),
+            ("POST", f"/api/tools/packshots/{slug}/upload", {"data":{"mapping_rows":"{}"},"files":[("files",("sku.png",make_png(),"image/png"))]}),
+            ("POST", f"/api/tools/packshots/{slug}/sku.png/replace", {"files":{"image":("sku.png",make_png(),"image/png")}}),
+        ]
+        for method, path, kwargs in calls:
+            with self.subTest(method=method, path=path):
+                response = self.client.request(method, path, **kwargs)
+                self.assertEqual(response.status_code, 403, response.text)
+
+    def test_ir_can_create_a_brand(self):
+        response = self.client.post("/api/tools/brands", data={"name":"New IR Brand"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["name"], "New IR Brand")
+
+    def test_ir_can_still_view_and_download_shared_library(self):
+        slug = self.brand["slug"]
+        self.storage.put(f"packshots/{slug}/sku.png", make_png(), "image/png")
+        self.current_role = "Viewer"
+        self.assertEqual(self.client.get("/api/tools/brands").status_code, 200)
+        self.assertEqual(self.client.get(f"/api/tools/testing/{slug}/images").status_code, 200)
+        self.assertEqual(self.client.get(f"/api/tools/packshots/{slug}").status_code, 200)
+        self.assertEqual(self.client.get(f"/api/tools/packshots/{slug}/download?selected=sku.png").status_code, 200)
+
     def test_testing_upload_filters_files_merges_assets_and_avoids_overwrite(self):
+        image_data = make_png()
         response = self.client.post(
             f"/api/tools/testing/{self.brand['slug']}/upload",
             data={"relative_paths": '["drinks/can.png", "photo.png", "readme.txt"]'},
-            files=[("files", ("can.png", PNG, "image/png")), ("files", ("photo.png", PNG, "image/png")), ("files", ("readme.txt", b"text", "text/plain"))],
+            files=[("files", ("can.png", image_data, "image/png")), ("files", ("photo.png", image_data, "image/png")), ("files", ("readme.txt", b"text", "text/plain"))],
         )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual((response.json()["added"], response.json()["ignored"]), (2, 1))
@@ -59,7 +97,7 @@ class ToolkitLibraryApiTests(unittest.TestCase):
         duplicate = self.client.post(
             f"/api/tools/testing/{self.brand['slug']}/upload",
             data={"relative_paths": '["drinks/can.png"]'},
-            files=[("files", ("can.png", PNG, "image/png"))],
+            files=[("files", ("can.png", image_data, "image/png"))],
         )
         self.assertEqual(duplicate.json()["added"], 1)
         self.assertTrue(self.storage.exists(f"testing/{self.brand['slug']}/drinks/can_1.png"))
@@ -126,7 +164,7 @@ class ToolkitLibraryApiTests(unittest.TestCase):
 
     def test_testing_asset_names_keep_first_case_and_unicode_labels(self):
         slug = self.brand["slug"]
-        for folder in ("GT", "gt", "Co.op Phan Thiết Column", "CA Berry (Mint) & More", "COC Topline (AW DMR)", "Team-X Shelf"):
+        for folder in ("GT", "gt", "Co.op Phan Thiáº¿t Column", "CA Berry (Mint) & More", "COC Topline (AW DMR)", "Team-X Shelf"):
             response = self.client.post(
                 f"/api/tools/testing/{slug}/upload",
                 data={"relative_paths": __import__("json").dumps([f"{folder}/photo.png"], ensure_ascii=False)},
@@ -136,8 +174,8 @@ class ToolkitLibraryApiTests(unittest.TestCase):
         gallery = self.client.get(f"/api/tools/testing/{slug}/images").json()
         self.assertEqual(gallery["asset_names"]["gt"], "GT")
         self.assertEqual(gallery["asset_names"][toolkit_library._slug("COC Topline (AW DMR)", "Asset")], "COC Topline (AW DMR)")
-        unicode_slug = toolkit_library._slug("Co.op Phan Thiết Column", "Asset")
-        self.assertEqual(gallery["asset_names"][unicode_slug], "Co.op Phan Thiết Column")
+        unicode_slug = toolkit_library._slug("Co.op Phan Thiáº¿t Column", "Asset")
+        self.assertEqual(gallery["asset_names"][unicode_slug], "Co.op Phan Thiáº¿t Column")
         punctuation_slug = toolkit_library._slug("CA Berry (Mint) & More", "Asset")
         self.assertEqual(gallery["asset_names"][punctuation_slug], "CA Berry (Mint) & More")
         self.assertEqual(gallery["asset_names"][toolkit_library._slug("Team-X Shelf", "Asset")], "Team-X Shelf")

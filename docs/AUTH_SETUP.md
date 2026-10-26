@@ -1,69 +1,36 @@
-﻿# Google sign-in setup
+# Sign-in and access control
 
-Google sign-in is enforced by FastAPI middleware for app pages and `/api/*` routes. The browser cannot bypass it by calling the API directly. Successful sign-in requires a valid Google ID token, a verified email, and an exact match against `ALLOWED_EMAIL_DOMAINS` or `ALLOWED_EMAILS`.
+FastAPI's default-deny `AuthMiddleware` protects app pages and every API route. Only `/health`, the login page/assets, OIDC initiation/callback, provider configuration, and profile/logout endpoints are public. `/health` is intentionally public for platform probes; `/auth/me` returns no profile without a valid session. No proxy authentication is required.
 
-## 1. Create Google OAuth credentials
+## Microsoft Entra work accounts
 
-In Google Cloud Console:
+Configure these backend environment variables:
 
-1. Select or create a project and configure the OAuth consent screen for your organization.
-2. Create an OAuth client ID of type **Web application**.
-3. Add the deployed origin as an authorized JavaScript origin, for example `https://faneosis.duckdns.org`.
-4. Add the exact authorized redirect URI `https://faneosis.duckdns.org/auth/callback`.
-5. Copy the client ID and client secret into the server's private `deploy/.env` file. Never put the secret in browser code or commit it.
-
-For a local instance on port 7860, use origin `http://localhost:7860` and redirect URI `http://localhost:7860/auth/callback`; configure the local environment to match. Google requires the registered redirect URI and `OAUTH_REDIRECT_URI` to match exactly.
-
-## 2. Configure server variables
-
-Set these values in `deploy/.env` on the server:
-
-| Variable | Example / meaning |
+| Variable | Purpose |
 | --- | --- |
-| `APP_BASE_URL` | Public app origin, e.g. `https://faneosis.duckdns.org` (no trailing slash) |
-| `OAUTH_REDIRECT_URI` | Exact callback, e.g. `https://faneosis.duckdns.org/auth/callback` |
-| `GOOGLE_CLIENT_ID` | Google OAuth Web client ID |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth Web client secret |
-| `SESSION_SECRET` | Random private secret, at least 32 random bytes encoded as hex |
-| `ALLOWED_EMAIL_DOMAINS` | Comma-separated exact email domains approved for access |
-| `ALLOWED_EMAILS` | Optional comma-separated individual email exceptions |
-| `SESSION_IDLE_MINUTES` | Idle timeout; default `480` (8 hours) |
-| `SESSION_MAX_DAYS` | Absolute session lifetime; default `7` |
-| `COOKIE_SECURE` | `true` for HTTPS deployments; use `false` only for local HTTP |
-| `AUTH_DB_PATH` | SQLite database path; Compose default `/data/auth.sqlite3` |
+| `MICROSOFT_TENANT_ID` | The company's single Entra tenant GUID. Generic `common`, `organizations`, and `consumers` authorities are rejected. |
+| `MICROSOFT_CLIENT_ID` | OIDC application client ID. |
+| `MICROSOFT_CLIENT_SECRET` | Backend-only OIDC client secret. |
+| `MICROSOFT_REDIRECT_URI` | Registered callback; defaults to `OAUTH_REDIRECT_URI` when omitted. |
+| `ALLOWED_EMAIL_DOMAINS` | Exact comma-separated domain allowlist. |
+| `SESSION_SECRET` | Server-side HMAC key for opaque session and OAuth state hashes. |
 
-Generate `SESSION_SECRET` on a trusted machine or the server and paste it into `.env`; do not include it in a command transcript or Git. For example, on Ubuntu: `openssl rand -hex 32`.
+Register the exact redirect URI ending in `/auth/callback` as a Web redirect URI. The server uses authorization-code flow with PKCE, validates the signature against keys from the configured tenant's OIDC metadata, and checks issuer, tenant ID, audience, nonce, expiry, and issue time. The immutable Entra `oid` claim is the verified principal identifier; the signed `email` claim (falling back to `preferred_username`) is normalized to lowercase and domain-allowlisted for Neosis's cross-provider email identity. The first allowed sign-in persists a `(tenant ID, oid) → email` binding in SQLite, and later sign-ins reject a changed address for the same object. Entra's email/UPN claims can change, so `oid` supplies stable identity verification while Neosis retains the email identity contract used by existing accounts and owned sessions.
 
-The example Compose configuration currently lists `flick2know.com`, `flick2know.in`, `fieldassist.com`, and `fieldassist.in` as allowed domains. Replace this list with the domains your team has explicitly approved. Domain matching is exact and case-insensitive; `example.com` does not grant access to subdomains such as `dept.example.com`. Add contractors or other one-off accounts to `ALLOWED_EMAILS` explicitly.
+## Google sign-in
 
-The existing `AUTH_USER` and `AUTH_HASH` variables remain required by Caddy. HTTP Basic Auth still protects the app in front of Google sign-in; `/health` is excluded so service health checks can reach it.
+Google OAuth is the active sign-in flow. Configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `OAUTH_REDIRECT_URI`. Microsoft OIDC server code is retained for later configuration, but the login page currently offers Google only. Google Drive consent for Accuracy Report continues to use the same Google callback independently of the login button.
 
-## 3. Rebuild and check
+Microsoft sign-in is not offered on the current login page. No session migration is performed; existing Google sessions remain in the database until their normal idle or absolute expiration.
 
-From `deploy/` after saving the environment file:
+## Domain access
 
-```bash
-docker compose up -d --build
-docker compose ps
-docker compose logs --tail=100 app
-```
+Set `ALLOWED_EMAIL_DOMAINS` to approved exact domains, such as `flick2know.com,flick2know.in,fieldassist.com,fieldassist.in`. Matching is case-insensitive and does not include subdomains implicitly. Optional `ALLOWED_EMAILS` entries remain exact email exceptions. IR status is resolved from the persisted IR list for every request; all other permitted users have Viewer access.
 
-Open the site in a private browser window. The expected sequence is Caddy's existing Basic Auth prompt followed by the IR Data Tool sign-in screen, then Google's account chooser. Test an allowed account and a non-allowlisted account. The latter should see an access denied message. Verify `/api/...` requests return `401` without a session and work after sign-in.
+## Deployment and session lifetime
 
-Google callback errors are logged without OAuth codes or state values. Never paste access tokens, client secrets, cookies, or the contents of `.env` into logs or support requests.
+Set `APP_BASE_URL`, `OAUTH_REDIRECT_URI`, `SESSION_SECRET`, provider values, `SESSION_IDLE_MINUTES`, `SESSION_MAX_DAYS`, `COOKIE_SECURE`, and `AUTH_DB_PATH` in the deployment environment. Keep `/data/auth.sqlite3` on the persistent data volume. Provider secrets and session keys are server configuration only.
 
-## Session and data behavior
+The Phase 3 SQLite lease scheduler scans every minute and runs cleanup through one worker at a time, including with multiple Uvicorn workers. It deletes owned Pseudo Labelling, Image Extraction, and Accuracy Report temporary files and ownership rows once they have been inactive for 24 hours. A persisted renewable operation lease keeps inference, extraction, export, and report generation safe while in progress. Signing out does not delete data. Unowned legacy directories are never auto-deleted; inspect with `python -m services.session_cleanup` and explicitly opt in with `--apply` only after review.
 
-The app stores only an opaque browser session token in a secure, HttpOnly, SameSite=Lax cookie. The server stores a keyed token hash, user email/profile, and session expiry in SQLite. OAuth state, nonce, and PKCE verifier are server-side and short-lived; the callback consumes the state once. The Google client secret and ID tokens are never sent to frontend JavaScript.
-
-Keep `/data/auth.sqlite3` on the persistent Compose data volume and back it up with the rest of `deploy/data`. Sessions are invalidated if `SESSION_SECRET` changes. The app uses a single Uvicorn worker because upload sessions and the login rate limiter are process-local.
-
-Existing labeler folders created before account sign-in have no owner mapping and cannot be accessed by authenticated users after this change. Existing Packshots and Testing Images library contents continue using their configured local or R2 storage backend.
-
-## Troubleshooting
-
-- **`redirect_uri_mismatch`:** Ensure Google Console and `OAUTH_REDIRECT_URI` match byte-for-byte, including scheme and path.
-- **Google login reports configuration missing:** Check the four required variables `APP_BASE_URL`, `OAUTH_REDIRECT_URI`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET`, plus `SESSION_SECRET`; rebuild/restart after changes.
-- **Allowed colleague is denied:** Check the email domain spelling and `ALLOWED_EMAIL_DOMAINS`, or add the exact address to `ALLOWED_EMAILS`.
-- **Cookie loops back to login:** Use HTTPS with `COOKIE_SECURE=true`; confirm Caddy proxies the same public host configured in `APP_BASE_URL`.
-- **Caddy Basic Auth is still shown:** That gate is intentionally kept. It is separate from Google authentication.
+`/health` remains publicly reachable for probes. Every other application route is protected by the FastAPI middleware, independent of reverse-proxy configuration. Microsoft and Google provider behavior requires tenant/client credentials for a live end-to-end check; automated tests mock the provider boundary.

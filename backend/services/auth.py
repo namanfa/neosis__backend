@@ -7,6 +7,7 @@ import os
 import secrets
 import threading
 import time
+import uuid
 from collections import defaultdict, deque
 from urllib.parse import urlencode, urlsplit
 
@@ -25,6 +26,8 @@ GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 _jwks = None
 _jwks_until = 0
+_microsoft_jwks = None
+_microsoft_jwks_until = 0
 _rate_lock = threading.Lock()
 _login_attempts = defaultdict(deque)
 
@@ -172,6 +175,96 @@ def _allowed_email(email):
     return email_is_allowed(email, domains, exceptions)
 
 
+def microsoft_configured():
+    return bool(_microsoft_tenant() and _config("MICROSOFT_CLIENT_ID") and _config("MICROSOFT_CLIENT_SECRET")
+                and (_config("MICROSOFT_REDIRECT_URI") or _config("OAUTH_REDIRECT_URI")) and _config("SESSION_SECRET"))
+
+
+@router.get("/providers")
+async def auth_providers():
+    return {"google": bool(_config("GOOGLE_CLIENT_ID") and _config("GOOGLE_CLIENT_SECRET")
+                            and _config("OAUTH_REDIRECT_URI") and _config("SESSION_SECRET")),
+            "microsoft": microsoft_configured()}
+
+
+def _microsoft_tenant():
+    tenant = _config("MICROSOFT_TENANT_ID")
+    if not tenant or tenant.casefold() in {"common", "organizations", "consumers"}:
+        return ""
+    try:
+        return str(uuid.UUID(tenant))
+    except (ValueError, AttributeError, TypeError):
+        return ""
+
+
+async def _microsoft_signing_keys(force=False):
+    global _microsoft_jwks, _microsoft_jwks_until
+    from authlib.jose import JsonWebKey
+    tenant = _microsoft_tenant()
+    if not tenant:
+        raise ValueError("Microsoft tenant is not configured")
+    now = time.monotonic()
+    if _microsoft_jwks and not force and now < _microsoft_jwks_until:
+        return _microsoft_jwks
+    metadata_url = f"https://login.microsoftonline.com/{tenant}/v2.0/.well-known/openid-configuration"
+    async with httpx.AsyncClient(timeout=8, follow_redirects=False) as client:
+        metadata_response = await client.get(metadata_url)
+        metadata_response.raise_for_status()
+        metadata = metadata_response.json()
+        if metadata.get("issuer") != f"https://login.microsoftonline.com/{tenant}/v2.0":
+            raise ValueError("Unexpected Microsoft tenant issuer")
+        jwks_url = metadata.get("jwks_uri", "")
+        if not jwks_url.startswith("https://login.microsoftonline.com/"):
+            raise ValueError("Unexpected Microsoft signing-key endpoint")
+        keys_response = await client.get(jwks_url)
+        keys_response.raise_for_status()
+        key_set = keys_response.json()
+    if not isinstance(key_set, dict) or not isinstance(key_set.get("keys"), list):
+        raise ValueError("Microsoft returned invalid signing keys")
+    _microsoft_jwks = JsonWebKey.import_key_set(key_set)
+    _microsoft_jwks_until = now + 3600
+    return _microsoft_jwks
+
+
+async def _verify_microsoft_id_token(token, transaction, client_id):
+    from authlib.jose import JsonWebToken
+    if not isinstance(token, str) or len(token) > 16384:
+        raise ValueError("Missing or invalid ID token")
+    header_part = token.split(".", 1)[0]
+    header = json.loads(base64.urlsafe_b64decode(header_part + "=" * (-len(header_part) % 4)))
+    if header.get("alg") != "RS256" or not header.get("kid"):
+        raise ValueError("Unexpected ID token signing algorithm")
+    verifier = JsonWebToken(["RS256"])
+    try:
+        claims = verifier.decode(token, await _microsoft_signing_keys())
+    except Exception:
+        claims = verifier.decode(token, await _microsoft_signing_keys(force=True))
+    claims.validate(leeway=60)
+    tenant = _microsoft_tenant()
+    issuer = f"https://login.microsoftonline.com/{tenant}/v2.0"
+    now = int(time.time())
+    if claims.get("iss") != issuer or claims.get("tid") != tenant:
+        raise ValueError("Unexpected Microsoft tenant")
+    audience = claims.get("aud")
+    audiences = audience if isinstance(audience, list) else [audience]
+    if client_id not in audiences or (len(audiences) > 1 and claims.get("azp") != client_id):
+        raise ValueError("Microsoft ID token audience mismatch")
+    if not isinstance(claims.get("exp"), (int, float)) or claims["exp"] <= now:
+        raise ValueError("Expired ID token")
+    if not isinstance(claims.get("iat"), (int, float)) or claims["iat"] > now + 60:
+        raise ValueError("Invalid ID token issue time")
+    if not secrets.compare_digest(str(claims.get("nonce", "")), transaction["nonce"]):
+        raise ValueError("Microsoft ID token nonce mismatch")
+    # Entra's signed oid is its immutable, verified principal claim. Email is
+    # retained as Neosis's cross-provider key and separately domain-allowlisted.
+    if not isinstance(claims.get("oid"), str) or not claims["oid"]:
+        raise ValueError("Microsoft immutable identity claim is missing")
+    email = claims.get("email") or claims.get("preferred_username")
+    if not isinstance(email, str) or "@" not in email:
+        raise ValueError("Microsoft account did not provide an address")
+    return claims
+
+
 @router.get("/login")
 async def begin_google_login(request: Request, next: str = "/"):
     next_path = safe_next(next)
@@ -197,14 +290,85 @@ async def begin_google_login(request: Request, next: str = "/"):
     return RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}", status_code=302)
 
 
+@router.get("/microsoft/login")
+async def begin_microsoft_login(request: Request, next: str = "/"):
+    next_path = safe_next(next)
+    if _rate_limited(request):
+        return RedirectResponse(_login_url(request, error="rate_limited", next_path=next_path), status_code=303)
+    tenant = _microsoft_tenant()
+    client_id = _config("MICROSOFT_CLIENT_ID")
+    client_secret = _config("MICROSOFT_CLIENT_SECRET")
+    redirect_uri = _config("MICROSOFT_REDIRECT_URI") or _config("OAUTH_REDIRECT_URI")
+    if not tenant or not client_id or not client_secret or not redirect_uri or not _config("SESSION_SECRET"):
+        return RedirectResponse(_login_url(request, error="microsoft_not_configured", next_path=next_path), status_code=303)
+    state, nonce = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+    verifier, challenge = _make_pkce_pair()
+    auth_store.save_oauth_transaction(state, nonce, verifier, next_path, provider="microsoft")
+    params = {"client_id": client_id, "response_type": "code", "redirect_uri": redirect_uri,
+              "response_mode": "query", "scope": "openid profile email", "state": state,
+              "nonce": nonce, "code_challenge": challenge, "code_challenge_method": "S256",
+              "prompt": "select_account"}
+    authorize_url = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize?{urlencode(params)}"
+    return RedirectResponse(authorize_url, status_code=302)
+
+
+async def microsoft_callback(request, transaction):
+    tenant = _microsoft_tenant()
+    client_id = _config("MICROSOFT_CLIENT_ID")
+    client_secret = _config("MICROSOFT_CLIENT_SECRET")
+    redirect_uri = _config("MICROSOFT_REDIRECT_URI") or _config("OAUTH_REDIRECT_URI")
+    failure = request.query_params.get("error")
+    if failure:
+        return RedirectResponse(_login_url(request, error="microsoft_denied" if failure == "access_denied" else "microsoft_error", next_path=transaction["next_path"]), status_code=303)
+    code = request.query_params.get("code")
+    if not tenant or not client_id or not client_secret or not redirect_uri or not code:
+        return RedirectResponse(_login_url(request, error="microsoft_not_configured", next_path=transaction["next_path"]), status_code=303)
+    try:
+        token_url = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
+        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
+            response = await client.post(token_url, data={
+                "grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri,
+                "client_id": client_id, "client_secret": client_secret,
+                "code_verifier": transaction["verifier"],
+            })
+            response.raise_for_status()
+            token_data = response.json()
+        claims = await _verify_microsoft_id_token(token_data.get("id_token"), transaction, client_id)
+        email = str(claims.get("email") or claims.get("preferred_username") or "").strip().casefold()
+        if not _allowed_email(email):
+            return RedirectResponse(_login_url(request, error="access_denied", next_path=transaction["next_path"]), status_code=303)
+        if not auth_store.bind_microsoft_identity(_microsoft_tenant(), claims.get("oid"), email):
+            return RedirectResponse(_login_url(request, error="microsoft_verification_failed", next_path=transaction["next_path"]), status_code=303)
+    except httpx.TransportError as exc:
+        logger.warning("Microsoft OAuth service unavailable (%s)", type(exc).__name__)
+        return RedirectResponse(_login_url(request, error="microsoft_unavailable", next_path=transaction["next_path"]), status_code=303)
+    except Exception as exc:
+        logger.warning("Microsoft OAuth callback verification failed (%s)", type(exc).__name__)
+        return RedirectResponse(_login_url(request, error="microsoft_verification_failed", next_path=transaction["next_path"]), status_code=303)
+    token = auth_store.create_session(email, str(claims.get("name") or email), "",
+                                      session_idle_minutes(), session_max_days())
+    response = RedirectResponse(transaction["next_path"], status_code=303)
+    response.set_cookie(cookie_name(), token, max_age=session_max_days() * 86400, path="/",
+                        secure=cookie_secure(), httponly=True, samesite="lax")
+    return response
+
+
 @router.get("/callback")
 async def google_callback(request: Request):
     state = request.query_params.get("state", "")
     transaction = auth_store.consume_oauth_transaction(state) if state else None
     if not transaction:
         return RedirectResponse(_login_url(request, error="invalid_state"), status_code=303)
+    if transaction.get("provider", "google") == "microsoft":
+        return await microsoft_callback(request, transaction)
+    report_consent = transaction.get("next_path") == "__accuracy_report_oauth__"
     if request.query_params.get("error"):
         failure = request.query_params.get("error")
+        if report_consent:
+            from fastapi.responses import HTMLResponse
+            report_error = "declined" if failure == "access_denied" else "consent_failed"
+            payload = json.dumps({"type": "accuracy-report-oauth", "error": report_error})
+            return HTMLResponse("<!doctype html><meta charset=utf-8><title>Permission not granted</title><p>Google permission was not granted. Close this window and retry.</p><script>if(window.opener){window.opener.postMessage(" + payload + ",window.location.origin);window.close()}</script>", headers={"Cache-Control": "no-store"})
         code = "access_denied" if failure == "access_denied" else "google_error"
         return RedirectResponse(_login_url(request, error=code, next_path=transaction["next_path"]), status_code=303)
     code = request.query_params.get("code")
@@ -235,17 +399,43 @@ async def google_callback(request: Request):
         claims = await _verify_id_token(token_data.get("id_token"), transaction, client_id)
     except OAuthFlowError as exc:
         logger.warning("OAuth callback failed (%s)", exc.code)
+        if report_consent:
+            from fastapi.responses import HTMLResponse
+            payload = json.dumps({"type": "accuracy-report-oauth", "error": "consent_failed"})
+            return HTMLResponse("<!doctype html><meta charset=utf-8><title>Permission failed</title><p>Google permission could not be confirmed. Close this window and retry.</p><script>if(window.opener){window.opener.postMessage(" + payload + ",window.location.origin);window.close()}</script>", headers={"Cache-Control": "no-store"})
         return RedirectResponse(_login_url(request, error=exc.code, next_path=transaction["next_path"]), status_code=303)
     except httpx.TransportError as exc:
         logger.warning("Google OAuth service unavailable (%s)", type(exc).__name__)
+        if report_consent:
+            from fastapi.responses import HTMLResponse
+            payload = json.dumps({"type": "accuracy-report-oauth", "error": "consent_failed"})
+            return HTMLResponse("<!doctype html><meta charset=utf-8><title>Permission failed</title><p>Google permission could not be confirmed. Close this window and retry.</p><script>if(window.opener){window.opener.postMessage(" + payload + ",window.location.origin);window.close()}</script>", headers={"Cache-Control": "no-store"})
         return RedirectResponse(_login_url(request, error="google_unreachable", next_path=transaction["next_path"]), status_code=303)
     except Exception as exc:
         # Do not include provider response bodies, codes, tokens or secrets in logs.
         logger.warning("OAuth callback verification failed (%s)", type(exc).__name__)
         error_code = "unverified_email" if "email is not verified" in str(exc) else "verification_failed"
+        if report_consent:
+            from fastapi.responses import HTMLResponse
+            payload = json.dumps({"type": "accuracy-report-oauth", "error": "consent_failed"})
+            return HTMLResponse("<!doctype html><meta charset=utf-8><title>Permission failed</title><p>Google permission could not be confirmed. Close this window and retry.</p><script>if(window.opener){window.opener.postMessage(" + payload + ",window.location.origin);window.close()}</script>", headers={"Cache-Control": "no-store"})
         return RedirectResponse(_login_url(request, error=error_code, next_path=transaction["next_path"]), status_code=303)
 
     email = str(claims["email"]).strip().casefold()
+    if report_consent:
+        from fastapi.responses import HTMLResponse
+        current_user = auth_store.load_session(cookie_token(request), session_idle_minutes())
+        if not current_user or str(current_user.get("email", "")).casefold() != email or not _allowed_email(email):
+            payload = json.dumps({"type": "accuracy-report-oauth", "error": "account_mismatch"})
+            return HTMLResponse("<!doctype html><meta charset=utf-8><title>Google account mismatch</title><p>Use the same Google account as your Neosis sign-in.</p><script>if(window.opener){window.opener.postMessage(" + payload + ",window.location.origin);window.close()}</script>", headers={"Cache-Control": "no-store"})
+        access_token = token_data.get("access_token")
+        granted_scopes = token_data.get("scope")
+        missing_scope = isinstance(granted_scopes, str) and "https://www.googleapis.com/auth/drive.file" not in granted_scopes.split()
+        if not isinstance(access_token, str) or len(access_token) > 8192 or missing_scope:
+            payload = json.dumps({"type": "accuracy-report-oauth", "error": "missing_permission"})
+            return HTMLResponse("<!doctype html><meta charset=utf-8><title>Permission missing</title><p>Google did not grant document access. Close this window and retry.</p><script>if(window.opener){window.opener.postMessage(" + payload + ",window.location.origin);window.close()}</script>", headers={"Cache-Control": "no-store"})
+        payload = json.dumps({"type": "accuracy-report-oauth", "access_token": access_token}).replace("<", "\\u003c")
+        return HTMLResponse("<!doctype html><meta charset=utf-8><title>Permission granted</title><p>Permission granted. This window will close.</p><script>if(window.opener){window.opener.postMessage(" + payload + ",window.location.origin);window.close()}</script>", headers={"Cache-Control": "no-store"})
     if not _allowed_email(email):
         return RedirectResponse(_login_url(request, error="access_denied", next_path=transaction["next_path"]), status_code=303)
     token = auth_store.create_session(
@@ -267,7 +457,9 @@ async def auth_me(request: Request):
         response = JSONResponse({"detail": "Authentication required"}, status_code=401)
         response.delete_cookie(cookie_name(), path="/", secure=cookie_secure(), httponly=True, samesite="lax")
         return response
-    return {"email": user["email"], "name": user["name"], "picture": user["picture"] or None}
+    email = str(user["email"]).strip().casefold()
+    return {"email": email, "name": user["name"], "picture": user["picture"] or None,
+            "role": "IR" if auth_store.is_ir_member(email) else "Viewer"}
 
 
 @router.post("/logout")
@@ -285,7 +477,7 @@ class AuthMiddleware:
     def __init__(self, app):
         self.app = app
         self.public_paths = {
-            "/health", "/login", "/login.html", "/auth/login", "/auth/callback",
+            "/health", "/login", "/login.html", "/auth/login", "/auth/microsoft/login", "/auth/callback", "/auth/providers",
             "/auth/me", "/auth/logout", "/logo/FieldAssistLogoColoured.svg",
             "/logo/ir-tool-mark.svg", "/logo/neosis-mark.svg",
             "/logo/fa-icon-blue.png", "/logo/fa-wordmark-blue.png", "/favicon.ico",
@@ -318,6 +510,9 @@ class AuthMiddleware:
                     response = RedirectResponse(_login_url(request, next_path=next_path, expired=expired), status_code=302)
                 await self._send(response, scope, receive, send)
                 return
+            email = str(user.get("email", "")).strip().casefold()
+            user["email"] = email
+            user["role"] = "IR" if auth_store.is_ir_member(email) else "Viewer"
             scope.setdefault("state", {})["user"] = user
         await self.app(scope, receive, send)
 

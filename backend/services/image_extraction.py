@@ -17,8 +17,9 @@ from urllib.parse import urljoin, urlparse
 import httpx
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Request
 from fastapi.responses import FileResponse, StreamingResponse
-from starlette.background import BackgroundTask
+from starlette.background import BackgroundTask, BackgroundTasks
 from . import auth_store
+from .session_cleanup import operation_lease
 
 router = APIRouter()
 MAX_SHEET_BYTES = 20 * 1024 * 1024
@@ -169,6 +170,8 @@ async def run_extraction(request: Request, file: UploadFile = File(...), column_
         downloads_dir = os.path.join(job_dir, "downloaded")
         os.makedirs(downloads_dir, exist_ok=True)
         try:
+            lease = operation_lease(job_id, "extraction_job", "generation")
+            lease.__enter__()
             with ThreadPoolExecutor(max_workers=20) as pool:
                 loop = asyncio.get_running_loop()
                 futures = [loop.run_in_executor(pool, lambda item=item: _download_with_client(client, item, downloads_dir)) for item in links]
@@ -190,6 +193,8 @@ async def run_extraction(request: Request, file: UploadFile = File(...), column_
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
         finally:
             client.close()
+            if 'lease' in locals():
+                lease.__exit__(None, None, None)
 
     return StreamingResponse(stream_events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
@@ -207,6 +212,7 @@ async def download_extraction(job_id: str, request: Request):
         raise HTTPException(404, "Download not found")
     if not auth_store.owns_extraction_job(job_id, request.state.user["email"]):
         raise HTTPException(404, "Download not found")
+    auth_store.touch_extraction_job(job_id)
     matches = [name for name in os.listdir(RESULTS_DIR) if name.startswith(f"extract_{job_id}_")]
     if not matches:
         raise HTTPException(404, "Download not found or expired")
@@ -215,7 +221,12 @@ async def download_extraction(job_id: str, request: Request):
     if not zips:
         raise HTTPException(404, "Download not ready")
     path = os.path.join(job_dir, zips[0])
-    return FileResponse(path, media_type="application/zip", filename=zips[0], background=BackgroundTask(_cleanup_extraction, job_dir, job_id))
+    lease = operation_lease(job_id, "extraction_job", "download")
+    lease.__enter__()
+    tasks = BackgroundTasks()
+    tasks.add_task(lease.__exit__, None, None, None)
+    tasks.add_task(_cleanup_extraction, job_dir, job_id)
+    return FileResponse(path, media_type="application/zip", filename=zips[0], background=tasks)
 
 
 def _cleanup_extraction(job_dir, job_id):

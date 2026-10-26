@@ -446,10 +446,12 @@ def _delete_gallery_images(storage, kind, slug, requested_keys=None):
     return len(deleted_keys)
 
 
-def require_delete_permission(user):
-    """Single authorization seam for gallery deletion; sessions are enforced by auth middleware."""
+def require_ir_permission(user):
+    """Require the current server-resolved IR role for any shared-library write."""
     if not user:
         raise HTTPException(401, "Authentication required")
+    if user.get("role") != "IR":
+        raise HTTPException(403, "IR role required")
     return user
 
 
@@ -911,6 +913,7 @@ def list_tool_brands(request: Request):
 
 @router.post("/brands")
 async def create_tool_brand(request: Request, name: str = Form(...), logo: UploadFile | None = File(None)):
+    require_ir_permission(getattr(request.state, "user", None))
     try:
         prepared_logo = None
         if logo and logo.filename:
@@ -935,6 +938,7 @@ async def create_tool_brand(request: Request, name: str = Form(...), logo: Uploa
 
 @router.post("/brands/{brand_slug}/logo")
 async def set_tool_brand_logo(brand_slug: str, request: Request, logo: UploadFile = File(...)):
+    require_ir_permission(getattr(request.state, "user", None))
     storage = request.app.state.storage
     brand = _brand(storage, brand_slug)
     prepared = _prepare_logo(logo.filename or "", await logo.read(MAX_LOGO_BYTES + 1))
@@ -998,6 +1002,7 @@ def list_testing_images(brand_slug: str, request: Request, asset: str = "all"):
 @router.post("/testing/{brand_slug}/asset-names")
 def update_testing_asset_names(brand_slug: str, request: Request, relative_paths: list[str] = Body(...)):
     """Update display names from source folder paths without uploading or moving images."""
+    require_ir_permission(getattr(request.state, "user", None))
     storage = request.app.state.storage
     _brand(storage, brand_slug)
     manifest, _ = _gallery_manifest(storage, "testing", brand_slug, bypass_memory=True)
@@ -1021,7 +1026,7 @@ def update_testing_asset_names(brand_slug: str, request: Request, relative_paths
 
 @router.delete("/testing/{brand_slug}/images")
 def delete_testing_images(brand_slug: str, request: Request, keys: list[str] = Body(...)):
-    require_delete_permission(getattr(request.state, "user", None))
+    require_ir_permission(getattr(request.state, "user", None))
     storage = request.app.state.storage
     _brand(storage, brand_slug)
     deleted = _delete_gallery_images(storage, "testing", brand_slug, keys)
@@ -1030,7 +1035,7 @@ def delete_testing_images(brand_slug: str, request: Request, keys: list[str] = B
 
 @router.delete("/testing/{brand_slug}")
 def delete_all_testing_images(brand_slug: str, request: Request):
-    require_delete_permission(getattr(request.state, "user", None))
+    require_ir_permission(getattr(request.state, "user", None))
     storage = request.app.state.storage
     _brand(storage, brand_slug)
     deleted = _delete_gallery_images(storage, "testing", brand_slug)
@@ -1075,6 +1080,7 @@ async def upload_testing_images(
     files: list[UploadFile] = File(...),
     relative_paths: str = Form(...),
 ):
+    require_ir_permission(getattr(request.state, "user", None))
     storage = request.app.state.storage
     _brand(storage, brand_slug)
     if not 1 <= len(files) <= MAX_FILES_PER_BATCH:
@@ -1209,7 +1215,8 @@ def _read_mapping(filename, content):
 
 
 @router.post("/packshots/prepare")
-async def prepare_packshot_mapping(mapping: UploadFile = File(...)):
+async def prepare_packshot_mapping(request: Request, mapping: UploadFile = File(...)):
+    require_ir_permission(getattr(request.state, "user", None))
     content = await mapping.read(MAX_SHEET_BYTES + 1)
     rows = _read_mapping(mapping.filename or "", content)
     return {"rows": rows}
@@ -1240,7 +1247,7 @@ def list_packshots(brand_slug: str, request: Request):
 
 @router.delete("/packshots/{brand_slug}/images")
 def delete_packshot_images(brand_slug: str, request: Request, keys: list[str] = Body(...)):
-    require_delete_permission(getattr(request.state, "user", None))
+    require_ir_permission(getattr(request.state, "user", None))
     storage = request.app.state.storage
     _brand(storage, brand_slug)
     deleted = _delete_gallery_images(storage, "packshots", brand_slug, keys)
@@ -1249,7 +1256,7 @@ def delete_packshot_images(brand_slug: str, request: Request, keys: list[str] = 
 
 @router.delete("/packshots/{brand_slug}")
 def delete_all_packshots(brand_slug: str, request: Request):
-    require_delete_permission(getattr(request.state, "user", None))
+    require_ir_permission(getattr(request.state, "user", None))
     storage = request.app.state.storage
     _brand(storage, brand_slug)
     deleted = _delete_gallery_images(storage, "packshots", brand_slug)
@@ -1264,6 +1271,7 @@ def _packshot_label_lock(storage, slug):
 
 @router.patch("/packshots/{brand_slug}/{image_key:path}/labels")
 async def update_packshot_label(brand_slug: str, image_key: str, request: Request):
+    require_ir_permission(getattr(request.state, "user", None))
     if not image_key or "/" in image_key or "\\" in image_key or image_key in {".", ".."}:
         raise HTTPException(400, "Invalid packshot image key")
     try:
@@ -1331,6 +1339,7 @@ async def upload_packshots(
     files: list[UploadFile] = File(...),
     mapping_rows: str = Form(...),
 ):
+    require_ir_permission(getattr(request.state, "user", None))
     storage = request.app.state.storage
     _brand(storage, brand_slug)
     if not 1 <= len(files) <= MAX_FILES_PER_BATCH:
@@ -1409,6 +1418,7 @@ async def upload_packshots(
 
 @router.post("/packshots/{brand_slug}/{filename}/replace")
 async def replace_packshot(brand_slug: str, filename: str, request: Request, image: UploadFile = File(...)):
+    require_ir_permission(getattr(request.state, "user", None))
     storage = request.app.state.storage
     _brand(storage, brand_slug)
     safe_name = _filename(filename)

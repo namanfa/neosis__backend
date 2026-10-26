@@ -1,8 +1,4 @@
 {$DOMAIN} {
-    @protected not path /health
-    basic_auth @protected {
-        {$AUTH_USER} {$AUTH_HASH}
-    }
     request_body {
         max_size 200MB
     }

@@ -1,6 +1,6 @@
 # Deploy Noesis on AWS EC2
 
-This guide runs the FastAPI backend and React UI on one **Ubuntu 24.04 x86_64 EC2 server**. Docker runs the app on a private Compose network, and Caddy serves both UI and API from the same HTTPS origin with HTTP Basic Authentication. Google OAuth setup is documented in [`../docs/AUTH_SETUP.md`](../docs/AUTH_SETUP.md).
+This guide runs the FastAPI backend and React UI on one **Ubuntu 24.04 x86_64 EC2 server**. Docker runs the app on a private Compose network, and Caddy serves both UI and API over HTTPS. Sign-in and access control are enforced by FastAPI. Google and Microsoft OIDC setup is documented in [`../docs/AUTH_SETUP.md`](../docs/AUTH_SETUP.md).
 
 The app requires the user to upload a `.pt` model at runtime; there is no default bundled model to preserve in the image.
 
@@ -82,25 +82,9 @@ cd ~/neosis__backend/deploy
 cp .env.example .env
 ```
 
-Generate a Caddy password hash. Enter the password when prompted:
+## 6. Configure sign-in
 
-```bash
-docker run --rm -it caddy:2 caddy hash-password
-```
-
-Edit `deploy/.env` and set `AUTH_HASH` to the generated hash, keeping it inside single quotes. For example:
-
-```dotenv
-DOMAIN=faneosis.duckdns.org
-AUTH_USER=team
-AUTH_HASH='$2a$14$REPLACE_WITH_THE_GENERATED_HASH'
-```
-
-Keep the single quotes around the hash so Docker Compose does not interpolate its `$` characters. If authentication fails, double every `$` in the hash as `$$`. Use a strong password and keep `.env` private; it is excluded from Git and the Docker build context.
-
-## 6. Configure Google sign-in
-
-Follow [`../docs/AUTH_SETUP.md`](../docs/AUTH_SETUP.md) to create a Google OAuth Web client and set `APP_BASE_URL`, `OAUTH_REDIRECT_URI`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, and the approved email allowlist in `deploy/.env`. Keep the existing `AUTH_USER` and `AUTH_HASH`; Caddy Basic Auth remains enabled as an additional access gate. The example allowlist in `.env.example` should be replaced with domains your team has approved.
+Follow [`../docs/AUTH_SETUP.md`](../docs/AUTH_SETUP.md) to configure Google OIDC. Set `APP_BASE_URL`, Google client values, `SESSION_SECRET`, and the approved email domain allowlist in the private `deploy/.env`. Microsoft sign-in is deferred until a later configuration change. Provider secrets are consumed only by the backend; never place them in frontend configuration.
 
 ## 7. Build and start the app
 
@@ -137,27 +121,15 @@ docker compose logs -f app
 
 This switches the shared Testing Images and Packshots library to R2. Existing files under `output/library` or `deploy/data/library` are not copied automatically; migrate them before switching if you need to keep them. Labeler session uploads and temporary Image Extraction jobs remain on the app's local session storage and are not moved to R2 by this setting.
 
-Open `https://faneosis.duckdns.org` in a browser. Caddy first asks for `AUTH_USER` and its password; after that, sign in with an approved Google account. The `/health` endpoint is public for health checks:
+Open `https://faneosis.duckdns.org` in a browser and sign in with an approved work account. The `/health` endpoint is public for health checks:
 
 ```bash
-curl -u team https://faneosis.duckdns.org/health
+curl https://faneosis.duckdns.org/health
 ```
 
-## 8. Delete session folders older than two days
+## Session cleanup
 
-Sessions are stored under `deploy/data/sessions`. Add a daily cleanup job for the `ubuntu` user:
-
-```bash
-crontab -e
-```
-
-Add this line, adjusting the path if the repository is stored elsewhere:
-
-```cron
-0 3 * * * find /home/ubuntu/neosis__backend/deploy/data/sessions -mindepth 1 -maxdepth 1 -type d -mmin +2880 -exec rm -rf -- {} \;
-```
-
-This removes session directories whose own modification time is older than 2,880 minutes. It permanently deletes those sessions and their uploaded/generated files.
+The app's persistent scheduler scans every minute and removes owned Pseudo Labelling, Image Extraction, and Accuracy Report temporary data after 24 hours without activity, including its ownership rows. It skips active operations and never automatically deletes unowned legacy folders. Inspect legacy candidates first with `docker compose exec app python -m services.session_cleanup`; deletion requires the explicit `--apply` option. Back up any legacy data before opting in.
 
 ## Update the deployment
 
