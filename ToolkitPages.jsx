@@ -159,8 +159,7 @@ const TOOL_CARDS = [
 ];
 
 function HomePage({ Shell, onToggleTheme }) {
-  const isIR=window.IR_USER?.role==="IR";
-  const cards=isIR?[...TOOL_CARDS,{title:"Control Panel",description:"Manage IR access and shared library permissions.",icon:"settings",route:"#/control-panel"}]:TOOL_CARDS;
+  const cards=TOOL_CARDS;
   const [query,setQuery]=React.useState("");
   React.useEffect(()=>{const update=event=>setQuery(event.detail||"");window.addEventListener("ir-search",update);return()=>window.removeEventListener("ir-search",update);},[]);
   const matches=card=>!query.trim()||`${card.title} ${card.description}`.toLowerCase().includes(query.trim().toLowerCase());

@@ -326,6 +326,7 @@ const APP_NAV_ITEMS = [
   { title:"Packshots", icon:"packshots", route:"#/packshots" },
   { title:"Model Dashboard", icon:"dashboard", route:"#/model-dashboard" },
   { title:"Accuracy Report", icon:"accuracy", route:"#/accuracy-report" },
+  { title:"Control Panel", icon:"settings", route:"#/control-panel", irOnly:true },
 ];
 const NEOSIS_BRAND_NAME = window.NEOSIS_BRAND_NAME || "Neosis";
 
@@ -424,8 +425,9 @@ function Shell({ children, stepLabel, title, titleContent, subtitle, backLink, a
   const [searchText, setSearchText] = useState("");
   const navRef = useRef(null);
   const user = window.IR_USER || {};
-  const visibleItems = APP_NAV_ITEMS.filter(item => item.title.toLowerCase().includes(searchText.trim().toLowerCase()));
   const initials = (user.name || user.email || "U").split(/[\s@._-]+/).filter(Boolean).slice(0,2).map(part=>part[0].toUpperCase()).join("");
+  const navItems = APP_NAV_ITEMS.filter(item => !item.irOnly || user.role === "IR");
+  const visibleItems = navItems.filter(item => item.title.toLowerCase().includes(searchText.trim().toLowerCase()));
   useEffect(() => { setAvatarPictureFailed(false); }, [user.picture]);
   useEffect(() => {
     const closeMenus = event => {
@@ -460,7 +462,7 @@ function Shell({ children, stepLabel, title, titleContent, subtitle, backLink, a
         </div>
       </nav>
       {showSteps&&<div className="workflow-progress"><ol className="neosis-steps" aria-label="Pseudo Labelling progress">{stepNames.map((name,i)=><li key={name} className={currentPage===i+1?"current":currentPage>i+1?"done":""} aria-current={currentPage===i+1?"step":undefined}><span>{currentPage>i+1?String.fromCharCode(10003):i+1}</span><b><span className="step-label">{name}</span><small className="step-mobile">Step {i+1} of 4 {"\u00b7"} {name}</small></b></li>)}</ol></div>}
-      {drawerOpen&&<><div className="app-drawer-backdrop" aria-hidden="true" onClick={()=>setDrawerOpen(false)}></div><aside className="app-drawer" aria-label="Tool navigation"><div className="app-drawer-head"><a href="#/" className="app-brand-link" onClick={()=>goTo("#/")}><img className="app-brand-mark" src="/logo/neosis-mark.svg" alt=""/><span>{NEOSIS_BRAND_NAME}</span></a><button type="button" className="app-icon-btn" aria-label="Close navigation menu" onClick={()=>setDrawerOpen(false)}><StrokeIcon name="close"/></button></div><nav className="app-drawer-nav">{APP_NAV_ITEMS.map(item=><button type="button" key={item.title} disabled={item.soon} className="app-menu-item" aria-current={window.location.hash===item.route?"page":undefined} onClick={()=>item.route&&!item.soon&&goTo(item.route)}><StrokeIcon name={item.icon} size={18}/>{item.title}<span aria-hidden="true">{item.soon?<em className="upcoming-pill">Upcoming</em>:<StrokeIcon name="arrow" size={14}/>}</span></button>)}</nav><div className="app-drawer-foot"><img src="/logo/FieldAssistLogoColoured.svg" alt="FieldAssist"/>Internal tools</div></aside></>}
+      {drawerOpen&&<><div className="app-drawer-backdrop" aria-hidden="true" onClick={()=>setDrawerOpen(false)}></div><aside className="app-drawer" aria-label="Tool navigation"><div className="app-drawer-head"><a href="#/" className="app-brand-link" onClick={()=>goTo("#/")}><img className="app-brand-mark" src="/logo/neosis-mark.svg" alt=""/><span>{NEOSIS_BRAND_NAME}</span></a><button type="button" className="app-icon-btn" aria-label="Close navigation menu" onClick={()=>setDrawerOpen(false)}><StrokeIcon name="close"/></button></div><nav className="app-drawer-nav">{navItems.map(item=><button type="button" key={item.title} disabled={item.soon} className="app-menu-item" aria-current={window.location.hash===item.route?"page":undefined} onClick={()=>item.route&&!item.soon&&goTo(item.route)}><StrokeIcon name={item.icon} size={18}/>{item.title}<span aria-hidden="true">{item.soon?<em className="upcoming-pill">Upcoming</em>:<StrokeIcon name="arrow" size={14}/>}</span></button>)}</nav><div className="app-drawer-foot"><img src="/logo/FieldAssistLogoColoured.svg" alt="FieldAssist"/>Internal tools</div></aside></>}
     </div>
     {title && <header className="neosis-page-head" data-page={title}><div className="neosis-page-title">{backLink}<h1>{titleContent||title}</h1>{subtitle && <p>{subtitle}</p>}</div>{actions && <div className="page-actions">{actions}</div>}</header>}
     <main className="neosis-content page-enter">{children}</main>
