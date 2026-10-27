@@ -470,7 +470,7 @@ async def _drive_create(access_token, content, title):
                      "X-Upload-Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                      "X-Upload-Content-Length": str(len(content))})
         if response.status_code >= 400:
-            raise RuntimeError("Google Drive rejected the document upload")
+            raise RuntimeError(f"Drive resumable session returned HTTP {response.status_code}")
         upload_url = response.headers.get("Location")
         if not upload_url:
             raise RuntimeError("Google Drive did not start a resumable upload")
@@ -481,12 +481,41 @@ async def _drive_create(access_token, content, title):
             headers={"Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                      "Content-Length": str(len(content))})
     if response.status_code >= 400:
-        raise RuntimeError("Google Drive rejected the document upload")
+        raise RuntimeError(f"Drive media upload returned HTTP {response.status_code}")
     data = response.json()
     file_id = data.get("id")
     if not file_id:
         raise RuntimeError("Google Drive did not return a document")
     return file_id, data.get("webViewLink") or "https://docs.google.com/document/d/" + file_id + "/edit"
+
+
+def _safe_generation_failure(stage, exc):
+    """Return an actionable, secret-free diagnostic for the UI and logs."""
+    message = str(exc)
+    if message == "Prepared document exceeds the Google Docs import size limit":
+        return "document_too_large", "The prepared document is too large for Google Docs. Reduce the image count or image sizes and retry."
+    match = re.fullmatch(r"Drive (resumable session|media upload) returned HTTP (\d{3})", message)
+    if match:
+        operation, status = match.groups()
+        code = f"drive_{operation.replace(' ', '_')}_http_{status}"
+        if status == "401":
+            detail = "Google rejected the access token. Retry and approve Drive access with the same Google account."
+        elif status == "403":
+            detail = "Google denied document creation. Check that the Drive API is enabled and Drive access was granted."
+        elif status == "404":
+            detail = "Google Drive did not find the upload endpoint. Check the Drive API configuration."
+        elif status == "429":
+            detail = "Google Drive is rate limiting document creation. Wait briefly, then retry."
+        elif int(status) >= 500:
+            detail = "Google Drive is temporarily unavailable. Retry in a few minutes."
+        else:
+            detail = f"Google Drive rejected the {operation} (HTTP {status}). Check the Google Drive configuration and retry."
+        return code, detail
+    if isinstance(exc, httpx.TimeoutException):
+        return "drive_timeout", "The document upload timed out while contacting Google Drive. Retry with fewer or smaller images."
+    if isinstance(exc, httpx.TransportError):
+        return "drive_unreachable", "The server could not reach Google Drive. Check outbound network access and retry."
+    return "generation_failed", f"{stage} failed. Review the inputs and retry."
 
 
 def _sse(event):
@@ -564,8 +593,9 @@ async def generate_report(session_id: str, request: Request, title: str = Form("
                 stage = "Reading data"
             elif message == "An uploaded image is no longer available":
                 stage = "Mapping images"
-            logger.warning("Accuracy report generation failed at %s (%s)", stage, type(exc).__name__)
-            yield _sse({"state": "error", "stage": stage, "message": f"{stage} failed. Review the inputs and retry."})
+            failure_code, safe_message = _safe_generation_failure(stage, exc)
+            logger.warning("Accuracy report generation failed at %s (%s; %s)", stage, type(exc).__name__, failure_code)
+            yield _sse({"state": "error", "stage": stage, "message": safe_message})
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
             if not complete:

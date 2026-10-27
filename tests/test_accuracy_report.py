@@ -359,6 +359,21 @@ class AccuracyReportTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "invalid upload location"):
                 asyncio.run(report._drive_create("test-access-token", b"docx", "Report title"))
 
+    def test_generation_failure_diagnostics_are_actionable_and_secret_free(self):
+        cases = {
+            "Drive resumable session returned HTTP 401": "Google rejected the access token.",
+            "Drive media upload returned HTTP 403": "Google denied document creation.",
+            "Drive media upload returned HTTP 429": "Google Drive is rate limiting",
+            "Prepared document exceeds the Google Docs import size limit": "The prepared document is too large",
+        }
+        for cause, expected in cases.items():
+            with self.subTest(cause=cause):
+                code, message = report._safe_generation_failure("Creating document", RuntimeError(cause))
+                self.assertIn(expected, message)
+                self.assertNotIn("access-token", message)
+                self.assertNotIn("response body", message)
+                self.assertTrue(code)
+
     def test_generate_200_image_report_streams_all_images_to_mocked_drive(self):
         images_dir = self.directory / "images"
         images_dir.mkdir(exist_ok=True)
